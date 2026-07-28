@@ -66,3 +66,5 @@ python manage.py runserver
 Создание проекта и настройка моделей.
 Рекомендуем сдать до: 04.08.2026
 
+- [Команды проверки моделей в shell](test-shell-models.md)
+- ![Результат выполнения скриптов](screens/test-shell-models.png)
