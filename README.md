@@ -24,6 +24,12 @@ poetry install
 ```
 
 
+## Миграции
+```shell
+python manage.py makemigrations bookshelf_app
+python manage.py migrate
+```
+
 ## Запуск сервера
 ```shell
 python manage.py runserver
