@@ -29,6 +29,9 @@ poetry config virtualenvs.in-project true
 
 # Зависимости
 poetry install
+
+# Загрузка окружения
+source .venv/bin/activate
 ```
 
 
