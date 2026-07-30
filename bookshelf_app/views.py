@@ -4,9 +4,13 @@ from django.http import HttpResponse
 
 def index(request):
     """Главная страница."""
-    return HttpResponse("<h1>Дневник читателя</h1><hr>Мой сайт на Python!")
+    return render(request, "bookshelf_app/index.html")
 
 
 def about(request):
     """Страница о нас."""
-    return HttpResponse("<h2>Страница о нас.</h2><hr>Мой сайт на Python!")
+    return render(request, "bookshelf_app/about.html")
+
+def books(request):
+    """Список всех книг."""
+    return render(request, "bookshelf_app/books.html")
