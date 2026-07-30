@@ -38,6 +38,17 @@ python manage.py makemigrations bookshelf_app
 python manage.py migrate
 ```
 
+## Демо данные
+В папке `./fixtures` хранятся данные для предварительного наполнения базы и демо-данные.  
+```shell
+# Импорт данных в новую базу
+python manage.py loaddata ./fixtures/bookshelf_basedata_fixtures.json # Минимальное наполнение для работы
+python manage.py loaddata ./fixtures/bookshelf_demodata_fixtures.json # Примеры данных для тестов и наглядности
+
+# Экспорт данных
+python manage.py dumpdata bookshelf_app --indent 4 > ./fixtures/bookshelf_export.json
+```
+
 ## Запуск сервера
 ```shell
 python manage.py runserver

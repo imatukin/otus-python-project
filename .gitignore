@@ -143,3 +143,4 @@ cython_debug/
 **/*.db
 **/*.sqlite3
 **/*.sqlite3-journal
+/fixtures/bookshelf_export.json
