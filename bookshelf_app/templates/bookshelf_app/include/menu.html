@@ -1,6 +1,8 @@
+{# Текущий пункт меню определяем по имени маршрута, а не по request.path #}
+{% with url_name=request.resolver_match.url_name %}
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
     <div class="container">
-        <a class="navbar-brand fw-bold" href="/"> Дневник читателя </a>
+        <a class="navbar-brand fw-bold" href="{% url 'index' %}"> Дневник читателя </a>
         <button
             class="navbar-toggler"
             type="button"
@@ -15,15 +17,35 @@
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav me-auto">
                 <li class="nav-item">
-                    <a class="nav-link px-3" aria-current="page" href="/">Главная</a>
+                    <a
+                        class="nav-link px-3{% if url_name == 'index' %} active{% endif %}"
+                        {% if url_name == 'index' %}aria-current="page"{% endif %}
+                        href="{% url 'index' %}"
+                    >
+                        Главная
+                    </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link px-3" href="/about"> О сайте </a>
+                    <a
+                        class="nav-link px-3{% if url_name == 'about' %} active{% endif %}"
+                        {% if url_name == 'about' %}aria-current="page"{% endif %}
+                        href="{% url 'about' %}"
+                    >
+                        О сайте
+                    </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link px-3" href="/books">Все книги</a>
+                    {# Карточка книги тоже подсвечивает раздел «Все книги» #}
+                    <a
+                        class="nav-link px-3{% if url_name == 'books' or url_name == 'book_detail' %} active{% endif %}"
+                        {% if url_name == 'books' %}aria-current="page"{% endif %}
+                        href="{% url 'books' %}"
+                    >
+                        Все книги
+                    </a>
                 </li>
             </ul>
         </div>
     </div>
 </nav>
+{% endwith %}
