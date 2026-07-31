@@ -1,0 +1,77 @@
+{% extends 'bookshelf_app/base.html' %}
+
+{% block title %} {{ page_title }} {% endblock %}
+
+{% block content %}
+<style>
+    .rating {
+        color: #ffc107;
+        letter-spacing: .1rem;
+    }
+</style>
+
+<div class="container py-4">
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h1 class="h3 card-title mb-1">{{ book.title }}</h1>
+            <p class="text-muted mb-3">
+                {{ book.author.name }}{% if book.published_year %} · {{ book.published_year }} г.{% endif %}
+            </p>
+
+            {% if book.genres.all %}
+            <p class="mb-3">
+                {% for genre in book.genres.all %}
+                <span class="badge bg-light text-dark border">{{ genre.name }}</span>
+                {% endfor %}
+            </p>
+            {% endif %}
+
+            {% if book.description %}
+            <p class="card-text">{{ book.description }}</p>
+            {% else %}
+            <p class="card-text text-muted fst-italic">Описание пока не добавлено.</p>
+            {% endif %}
+
+            {% if book.author.bio %}
+            <hr>
+            <h2 class="h6 text-muted">Об авторе</h2>
+            <p class="card-text small mb-0">{{ book.author.bio }}</p>
+            {% endif %}
+        </div>
+
+        {% if book.added_by %}
+        <div class="card-footer bg-white border-top-0 small text-muted">
+            Добавил: {{ book.added_by.nickname }}
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h2 class="h4 mb-0">Отзывы</h2>
+        <span class="badge bg-secondary">Всего: {{ reviews|length }}</span>
+    </div>
+
+    {% for review in reviews %}
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                    <span class="fw-semibold">{{ review.reader.nickname }}</span>
+                    <span class="text-muted small ms-2">{{ review.created_at|date:"d.m.Y H:i" }}</span>
+                </div>
+                <span class="rating" title="Оценка: {{ review.rating }} из 5">
+                    {% for _ in "12345" %}
+                        {% if forloop.counter <= review.rating %}★{% else %}☆{% endif %}
+                    {% endfor %}
+                </span>
+            </div>
+            <p class="card-text mb-0">{{ review.text|linebreaksbr }}</p>
+        </div>
+    </div>
+    {% empty %}
+    <div class="alert alert-info mb-0" role="alert">
+        Отзывов пока нет — будьте первым.
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
