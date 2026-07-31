@@ -38,6 +38,24 @@ argon2 = ["argon2-cffi (>=23.1.0)"]
 bcrypt = ["bcrypt (>=4.1.1)"]
 
 [[package]]
+name = "faker"
+version = "40.36.0"
+description = "Faker is a Python package that generates fake data for you."
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "faker-40.36.0-py3-none-any.whl", hash = "sha256:82b9497d9cfe017048075bcf969298a74b1b6e39f5e4dad1211085d1133f7b62"},
+    {file = "faker-40.36.0.tar.gz", hash = "sha256:754048c76c03afa7de83eee8f4bcee3cf668cbb7d995f54a4e9678db7f110308"},
+]
+
+[package.dependencies]
+tzdata = {version = "*", markers = "platform_system == \"Windows\""}
+
+[package.extras]
+tzdata = ["tzdata"]
+
+[[package]]
 name = "sqlparse"
 version = "0.5.5"
 description = "A non-validating SQL parser."
@@ -60,7 +78,7 @@ description = "Provider of IANA time zone data"
 optional = false
 python-versions = ">=2"
 groups = ["main"]
-markers = "sys_platform == \"win32\""
+markers = "sys_platform == \"win32\" or platform_system == \"Windows\""
 files = [
     {file = "tzdata-2026.3-py2.py3-none-any.whl", hash = "sha256:dc096730c87af6cab1b171c9d532be840741ff5d459015e7f6947bd7d7e54931"},
     {file = "tzdata-2026.3.tar.gz", hash = "sha256:4a1518b8993086a7982523e071643f3c0e5f213e75b21318e78bcabfff9d1415"},
@@ -69,4 +87,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13"
-content-hash = "bcc52115a8092c8a6a6188e945bbbafddbd4ff66a97c27e1bd3e36281c547fb8"
+content-hash = "7495c182ca0d07bd60f1aa47ebbf80f9696c009d8c5f14f1eb262bbeb9f4488a"

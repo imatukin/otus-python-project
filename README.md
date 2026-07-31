@@ -42,7 +42,8 @@ python manage.py migrate
 ```
 
 ## Демо данные
-В папке `./fixtures` хранятся данные для предварительного наполнения базы и демо-данные.  
+В папке `./fixtures` хранятся данные для предварительного наполнения базы и демо-данные.
+Для загрузки данных в базу можно использовать импорт или генерацию случайных данных:
 ```shell
 # Импорт данных в новую базу
 python manage.py loaddata ./fixtures/bookshelf_basedata_fixtures.json # Минимальное наполнение для работы
@@ -50,6 +51,9 @@ python manage.py loaddata ./fixtures/bookshelf_demodata_fixtures.json # Прим
 
 # Экспорт данных
 python manage.py dumpdata bookshelf_app --indent 4 > ./fixtures/bookshelf_export.json
+
+# Гненерация случайных данных
+python manage.py gen_data
 
 # Создать пользователя Админа для /admin
 python manage.py createsuperuser
