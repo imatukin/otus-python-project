@@ -34,4 +34,13 @@ class ReaderAdmin(admin.ModelAdmin):
 
 @admin.register(Review)
 class ReviewAdmin(admin.ModelAdmin):
+    # fields = ("book", "reader", "text", "rating", "created_at")
+    readonly_fields = ("text", "rating", "created_at")
+    fieldsets = (
+        (None, {"fields": ("book", "reader")}),
+        (
+            "Дополнительная информация",
+            {"fields": ("text", "rating", "created_at"), "classes": ("collapse",)},
+        ),
+    )
     pass
