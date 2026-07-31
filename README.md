@@ -50,6 +50,9 @@ python manage.py loaddata ./fixtures/bookshelf_demodata_fixtures.json # Прим
 
 # Экспорт данных
 python manage.py dumpdata bookshelf_app --indent 4 > ./fixtures/bookshelf_export.json
+
+# Создать пользователя Админа для /admin
+python manage.py createsuperuser
 ```
 
 ## Запуск сервера
