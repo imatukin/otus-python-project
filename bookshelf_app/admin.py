@@ -1,4 +1,5 @@
 from django.contrib import admin
+
 from .models import Author, Book, Genre, Reader, Review
 
 
@@ -34,7 +35,7 @@ class ReaderAdmin(admin.ModelAdmin):
 
 @admin.register(Review)
 class ReviewAdmin(admin.ModelAdmin):
-    # fields = ("book", "reader", "text", "rating", "created_at")
+    list_display = ("reader", "book", "rating", "text")
     readonly_fields = ("text", "rating", "created_at")
     fieldsets = (
         (None, {"fields": ("book", "reader")}),
@@ -43,4 +44,11 @@ class ReviewAdmin(admin.ModelAdmin):
             {"fields": ("text", "rating", "created_at"), "classes": ("collapse",)},
         ),
     )
-    pass
+
+    @admin.action(description="Увеличить рейтинг на 1")
+    def up_rating(self, request, queryset):
+        for review in queryset:
+            review.rating += 1
+            review.save()
+
+    actions = (up_rating,)
