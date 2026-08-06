@@ -1,6 +1,6 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 
-from .models import Author, Book, Genre, Reader, Review
+from .models import MAX_RATING, Author, Book, Genre, Reader, Review
 
 
 @admin.register(Author)
@@ -13,7 +13,7 @@ class BookAdmin(admin.ModelAdmin):
     list_display = ("title", "author", "published_year", "genres_list")
     ordering = ("author",)
     list_filter = ("genres",)
-    search_fields = ("title", "author")
+    search_fields = ("title", "author__name")
 
     def genres_list(self, obj):
         return ", ".join([genre.name for genre in obj.genres.all()])
@@ -47,8 +47,11 @@ class ReviewAdmin(admin.ModelAdmin):
 
     @admin.action(description="Увеличить рейтинг на 1")
     def up_rating(self, request, queryset):
+        """Поднимает оценку на балл"""
         for review in queryset:
+            if review.rating >= MAX_RATING:
+                continue
             review.rating += 1
-            review.save()
+            review.save(update_fields=("rating",))
 
     actions = (up_rating,)

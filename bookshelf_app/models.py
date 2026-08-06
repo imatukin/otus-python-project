@@ -1,6 +1,9 @@
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
+MIN_RATING = 1
+MAX_RATING = 5
+
 
 class Author(models.Model):
     """Автор книги."""
@@ -85,7 +88,7 @@ class Review(models.Model):
     text = models.TextField('Текст отзыва')
     rating = models.PositiveSmallIntegerField(
         'Оценка',
-        validators=[MinValueValidator(1), MaxValueValidator(5)],
+        validators=[MinValueValidator(MIN_RATING), MaxValueValidator(MAX_RATING)],
     )
     created_at = models.DateTimeField('Дата создания', auto_now_add=True)
 
