@@ -36,7 +36,20 @@
     <body>
         <header>{% include 'bookshelf_app/include/menu.html' %}</header>
 
-        <main>{% block content %}{% endblock %}</main>
+        <main>
+            {% if messages %}
+            <div class="container pt-3">
+                {% for message in messages %}
+                <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></button>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% block content %}{% endblock %}
+        </main>
 
         <footer class="bg-body-tertiary text-center text-muted py-3 border-top">
             <div class="container">

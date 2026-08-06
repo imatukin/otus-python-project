@@ -52,7 +52,7 @@ python manage.py loaddata ./fixtures/bookshelf_demodata_fixtures.json # Прим
 # Экспорт данных
 python manage.py dumpdata bookshelf_app --indent 4 > ./fixtures/bookshelf_export.json
 
-# Гненерация случайных данных
+# Генерация случайных данных
 python manage.py gen_data
 
 # Создать пользователя Админа для /admin

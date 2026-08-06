@@ -44,6 +44,15 @@
                         Все книги
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a
+                        class="nav-link px-3{% if url_name == 'book_add' %} active{% endif %}"
+                        {% if url_name == 'book_add' %}aria-current="page"{% endif %}
+                        href="{% url 'book_add' %}"
+                    >
+                        Добавить книгу
+                    </a>
+                </li>
             </ul>
         </div>
     </div>
