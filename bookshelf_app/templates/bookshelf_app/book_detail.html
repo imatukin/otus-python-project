@@ -2,14 +2,16 @@
 
 {% block title %} {{ page_title }} {% endblock %}
 
-{% block content %}
+{% block extra_css %}
 <style>
     .rating {
         color: #ffc107;
         letter-spacing: .1rem;
     }
 </style>
+{% endblock %}
 
+{% block content %}
 <div class="container py-4">
     <div class="card shadow-sm mb-4">
         <div class="card-body">

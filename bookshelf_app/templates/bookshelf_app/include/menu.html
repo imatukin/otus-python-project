@@ -1,4 +1,3 @@
-{# Текущий пункт меню определяем по имени маршрута, а не по request.path #}
 {% with url_name=request.resolver_match.url_name %}
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
     <div class="container">
@@ -35,7 +34,6 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    {# Карточка книги тоже подсвечивает раздел «Все книги» #}
                     <a
                         class="nav-link px-3{% if url_name == 'books' or url_name == 'book_detail' %} active{% endif %}"
                         {% if url_name == 'books' %}aria-current="page"{% endif %}

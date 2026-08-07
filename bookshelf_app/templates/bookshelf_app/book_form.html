@@ -2,10 +2,8 @@
 
 {% block title %} {{ page_title }} {% endblock %}
 
-{% block content %}
+{% block extra_css %}
 <style>
-    /* Подсветка полей с ошибками: Bootstrap-класс is-invalid навесить нельзя,
-       виджеты объявлены в forms.py, поэтому красим через класс-обёртку. */
     .field-invalid .form-control,
     .field-invalid .form-select {
         border-color: #dc3545;
@@ -21,7 +19,9 @@
         overflow-y: auto;
     }
 </style>
+{% endblock %}
 
+{% block content %}
 <div class="container py-4">
     <div class="row justify-content-center">
         <div class="col-lg-8">

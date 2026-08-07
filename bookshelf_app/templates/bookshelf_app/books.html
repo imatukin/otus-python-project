@@ -2,7 +2,7 @@
 
 {% block title %} {{page_title}} {% endblock %}
 
-{% block content %}
+{% block extra_css %}
 <style>
     .book-card {
         transition: transform .15s ease-in-out, box-shadow .15s ease-in-out;
@@ -27,7 +27,9 @@
         text-decoration: underline;
     }
 </style>
+{% endblock %}
 
+{% block content %}
 <div class="container py-4">
     <div class="d-flex align-items-center justify-content-between mb-4">
         <h1 class="h3 mb-0">{{ page_title }}</h1>
