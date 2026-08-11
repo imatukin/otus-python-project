@@ -31,6 +31,13 @@
 
 {% block content %}
 <div class="container py-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb small">
+            <li class="breadcrumb-item"><a href="{% url 'index' %}">Главная</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Все книги</li>
+        </ol>
+    </nav>
+
     <div class="d-flex align-items-center justify-content-between mb-4">
         <h1 class="h3 mb-0">{{ page_title }}</h1>
         <div class="d-flex align-items-center gap-3">
