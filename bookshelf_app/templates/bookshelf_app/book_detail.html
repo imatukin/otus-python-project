@@ -17,9 +17,14 @@
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-start gap-3">
                 <h1 class="h3 card-title mb-1">{{ book.title }}</h1>
-                <a href="{% url 'book_edit' book.id %}" class="btn btn-outline-primary btn-sm flex-shrink-0">
-                    Редактировать
-                </a>
+                <div class="d-flex gap-2 flex-shrink-0">
+                    <a href="{% url 'book_edit' book.id %}" class="btn btn-outline-primary btn-sm">
+                        Редактировать
+                    </a>
+                    <a href="{% url 'book_delete' book.id %}" class="btn btn-outline-danger btn-sm">
+                        Удалить
+                    </a>
+                </div>
             </div>
             <p class="text-muted mb-3">
                 {{ book.author.name }}{% if book.published_year %} · {{ book.published_year }} г.{% endif %}

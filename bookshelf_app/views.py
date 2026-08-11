@@ -1,7 +1,8 @@
 from django.contrib.messages.views import SuccessMessageMixin
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
 from django.views.generic import (
     CreateView,
+    DeleteView,
     DetailView,
     ListView,
     TemplateView,
@@ -85,3 +86,19 @@ class BookUpdateView(BookBase, SuccessMessageMixin, UpdateView):
             cancel_url=reverse("book_detail", args=[self.object.pk]),
         )
         return context
+
+
+class BookDeleteView(BookBase, SuccessMessageMixin, DeleteView):
+    """Удаление книги."""
+
+    template_name = "bookshelf_app/book_delete.html"
+    context_object_name = "book"
+    success_url = reverse_lazy("books")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = f"Удаление: {self.object.title}"
+        return context
+
+    def get_success_message(self, cleaned_data):
+        return f"Книга «{self.object.title}» удалена из каталога."
