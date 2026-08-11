@@ -13,22 +13,51 @@ from bookshelf_app.forms import BookForm
 from bookshelf_app.models import Book
 
 
+class Breadcrumbs:
+    """Цепочка навигации."""
+
+    def get_breadcrumbs(self):
+        return [{"title": "Главная", "url": reverse("index")}]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["breadcrumbs"] = self.get_breadcrumbs()
+        return context
+
+
 class IndexView(TemplateView):
     """Главная страница."""
 
     template_name = "bookshelf_app/index.html"
 
 
-class AboutView(TemplateView):
+class AboutView(Breadcrumbs, TemplateView):
     """Страница о нас."""
 
     template_name = "bookshelf_app/about.html"
 
+    def get_breadcrumbs(self):
+        return super().get_breadcrumbs() + [{"title": "О сайте"}]
 
-class BookBase:
+
+class BookBase(Breadcrumbs):
     """Базовая view для книги."""
 
     model = Book
+
+    def get_breadcrumbs(self):
+        return super().get_breadcrumbs() + [
+            {"title": "Все книги", "url": reverse("books")}
+        ]
+
+
+class BookObjectBase(BookBase):
+    """Базовая view для страниц конкретной книги."""
+
+    def get_breadcrumbs(self):
+        return super().get_breadcrumbs() + [
+            {"title": self.object.title, "url": self.object.get_absolute_url()}
+        ]
 
 
 class BookListView(BookBase, ListView):
@@ -39,7 +68,7 @@ class BookListView(BookBase, ListView):
     extra_context = {"page_title": "Все книги."}
 
 
-class BookDetailView(BookBase, DetailView):
+class BookDetailView(BookObjectBase, DetailView):
     """Страница одной книги: информация о книге и список отзывов."""
 
     template_name = "bookshelf_app/book_detail.html"
@@ -59,6 +88,9 @@ class BookCreateView(BookBase, SuccessMessageMixin, CreateView):
     template_name = "bookshelf_app/book_form.html"
     success_message = "Книга «%(title)s» добавлена в каталог."
 
+    def get_breadcrumbs(self):
+        return super().get_breadcrumbs() + [{"title": "Добавление"}]
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(
@@ -70,12 +102,15 @@ class BookCreateView(BookBase, SuccessMessageMixin, CreateView):
         return context
 
 
-class BookUpdateView(BookBase, SuccessMessageMixin, UpdateView):
+class BookUpdateView(BookObjectBase, SuccessMessageMixin, UpdateView):
     """Редактирование книги."""
 
     form_class = BookForm
     template_name = "bookshelf_app/book_form.html"
     success_message = "Книга «%(title)s» обновлена."
+
+    def get_breadcrumbs(self):
+        return super().get_breadcrumbs() + [{"title": "Редактирование"}]
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -88,12 +123,15 @@ class BookUpdateView(BookBase, SuccessMessageMixin, UpdateView):
         return context
 
 
-class BookDeleteView(BookBase, SuccessMessageMixin, DeleteView):
+class BookDeleteView(BookObjectBase, SuccessMessageMixin, DeleteView):
     """Удаление книги."""
 
     template_name = "bookshelf_app/book_delete.html"
     context_object_name = "book"
     success_url = reverse_lazy("books")
+
+    def get_breadcrumbs(self):
+        return super().get_breadcrumbs() + [{"title": "Удаление"}]
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

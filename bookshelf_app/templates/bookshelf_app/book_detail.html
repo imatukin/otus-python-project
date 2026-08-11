@@ -13,13 +13,7 @@
 
 {% block content %}
 <div class="container py-4">
-    <nav aria-label="breadcrumb">
-        <ol class="breadcrumb small">
-            <li class="breadcrumb-item"><a href="{% url 'index' %}">Главная</a></li>
-            <li class="breadcrumb-item"><a href="{% url 'books' %}">Все книги</a></li>
-            <li class="breadcrumb-item active" aria-current="page">{{ book.title }}</li>
-        </ol>
-    </nav>
+    {% include 'bookshelf_app/include/breadcrumb.html' %}
 
     <div class="card shadow-sm mb-4">
         <div class="card-body">
