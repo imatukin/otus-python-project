@@ -1,82 +1,87 @@
-from django.contrib import messages
-from django.shortcuts import get_object_or_404, redirect, render
+from django.contrib.messages.views import SuccessMessageMixin
 from django.urls import reverse
+from django.views.generic import (
+    CreateView,
+    DetailView,
+    ListView,
+    TemplateView,
+    UpdateView,
+)
+
 from bookshelf_app.forms import BookForm
 from bookshelf_app.models import Book
 
 
-def index(request):
+class IndexView(TemplateView):
     """Главная страница."""
-    return render(request, "bookshelf_app/index.html")
+
+    template_name = "bookshelf_app/index.html"
 
 
-def about(request):
+class AboutView(TemplateView):
     """Страница о нас."""
-    return render(request, "bookshelf_app/about.html")
+
+    template_name = "bookshelf_app/about.html"
 
 
-def books(request):
+class BookBase:
+    """Базовая view для книги."""
+
+    model = Book
+
+
+class BookListView(BookBase, ListView):
     """Список всех книг с автором, жанрами и средней оценкой."""
-    books = Book.objects.all()
-    context = {
-        "books": books,
-        "page_title": "Все книги.",
-    }
-    return render(request, "bookshelf_app/books.html", context)
+
+    template_name = "bookshelf_app/books.html"
+    context_object_name = "books"
+    extra_context = {"page_title": "Все книги."}
 
 
-def book_add(request):
-    """Добавление книги в общий каталог."""
-    if request.method == "POST":
-        form = BookForm(request.POST)
-        if form.is_valid():
-            book = form.save()
-            messages.success(request, f"Книга «{book.title}» добавлена в каталог.")
-            return redirect("book_detail", book_id=book.pk)
-    else:
-        form = BookForm()
-
-    context = {
-        "form": form,
-        "page_title": "Добавить книгу",
-        "form_subtitle": "Книга попадёт в общий каталог — её увидят все читатели.",
-        "submit_label": "Добавить книгу",
-        "cancel_url": reverse("books"),
-    }
-    return render(request, "bookshelf_app/book_form.html", context)
-
-
-def book_detail(request, book_id):
+class BookDetailView(BookBase, DetailView):
     """Страница одной книги: информация о книге и список отзывов."""
-    book = get_object_or_404(Book, pk=book_id)
-    reviews = book.reviews.all().order_by("-created_at")
-    context = {
-        "book": book,
-        "reviews": reviews,
-        "page_title": book.title,
-    }
-    return render(request, "bookshelf_app/book_detail.html", context)
+
+    template_name = "bookshelf_app/book_detail.html"
+    context_object_name = "book"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["reviews"] = self.object.reviews.all().order_by("-created_at")
+        context["page_title"] = self.object.title
+        return context
 
 
-def book_edit(request, book_id):
+class BookCreateView(BookBase, SuccessMessageMixin, CreateView):
+    """Добавление книги в общий каталог."""
+
+    form_class = BookForm
+    template_name = "bookshelf_app/book_form.html"
+    success_message = "Книга «%(title)s» добавлена в каталог."
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(
+            page_title="Добавить книгу",
+            form_subtitle="Книга попадёт в общий каталог — её увидят все читатели.",
+            submit_label="Добавить книгу",
+            cancel_url=reverse("books"),
+        )
+        return context
+
+
+class BookUpdateView(BookBase, SuccessMessageMixin, UpdateView):
     """Редактирование книги."""
-    book = get_object_or_404(Book, pk=book_id)
 
-    if request.method == "POST":
-        form = BookForm(request.POST, instance=book)
-        if form.is_valid():
-            book = form.save()
-            messages.success(request, f"Книга «{book.title}» обновлена.")
-            return redirect("book_detail", book_id=book.pk)
-    else:
-        form = BookForm(instance=book)
+    form_class = BookForm
+    template_name = "bookshelf_app/book_form.html"
+    success_message = "Книга «%(title)s» обновлена."
 
-    context = {
-        "form": form,
-        "book": book,
-        "page_title": f"Редактирование: {book.title}",
-        "form_subtitle": "Изменения увидят все читатели каталога.",
-        "submit_label": "Сохранить",
-        "cancel_url": reverse("book_detail", args=[book.pk]),
-    }
-    return render(request, "bookshelf_app/book_form.html", context)
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(
+            page_title=f"Редактирование: {self.object.title}",
+            form_subtitle="Изменения увидят все читатели каталога.",
+            submit_label="Сохранить",
+            cancel_url=reverse("book_detail", args=[self.object.pk]),
+        )
+        return context

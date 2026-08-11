@@ -1,12 +1,19 @@
 from django.urls import path
 
-from bookshelf_app.views import index, about, books, book_add, book_detail, book_edit
+from bookshelf_app.views import (
+    AboutView,
+    BookCreateView,
+    BookDetailView,
+    BookListView,
+    BookUpdateView,
+    IndexView,
+)
 
 urlpatterns = [
-    path("", index, name="index"),
-    path("about/", about, name="about"),
-    path("books/", books, name="books"),
-    path("books/add/", book_add, name="book_add"),
-    path("books/<int:book_id>/", book_detail, name="book_detail"),
-    path("books/<int:book_id>/edit/", book_edit, name="book_edit"),
+    path("", IndexView.as_view(), name="index"),
+    path("about/", AboutView.as_view(), name="about"),
+    path("books/", BookListView.as_view(), name="books"),
+    path("books/add/", BookCreateView.as_view(), name="book_add"),
+    path("books/<int:pk>/", BookDetailView.as_view(), name="book_detail"),
+    path("books/<int:pk>/edit/", BookUpdateView.as_view(), name="book_edit"),
 ]

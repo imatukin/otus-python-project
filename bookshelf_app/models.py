@@ -1,5 +1,6 @@
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.urls import reverse
 
 MIN_RATING = 1
 MAX_RATING = 5
@@ -71,6 +72,10 @@ class Book(models.Model):
 
     def __str__(self):
         return self.title
+
+    def get_absolute_url(self):
+        """Ссылка на страницу книги — сюда возвращаемся после создания/редактирования."""
+        return reverse('book_detail', args=[self.pk])
 
 
 class Review(models.Model):
