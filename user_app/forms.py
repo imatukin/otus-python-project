@@ -123,3 +123,61 @@ class CustomAuthenticationForm(AuthenticationForm):
     def clean_username(self):
         """Приводим email к тому же виду, в котором он сохранён."""
         return self.cleaned_data["username"].strip().lower()
+
+
+class ProfileForm(forms.ModelForm):
+    """Редактирование собственного профиля."""
+
+    class Meta:
+        model = User
+        fields = ("username", "full_name", "about", "date_of_birth", "avatar")
+        labels = {
+            "username": "Имя пользователя",
+            "full_name": "ФИО",
+            "about": "О себе",
+            "date_of_birth": "Дата рождения",
+            "avatar": "Аватар",
+        }
+        help_texts = {
+            "username": "Так вас будут видеть другие читатели. Если пусто — покажем email.",
+            "avatar": "Картинка для страницы профиля.",
+        }
+        widgets = {
+            "username": forms.TextInput(
+                attrs={
+                    "class": "form-control form-control-lg",
+                    "placeholder": "Например, «Иван»",
+                    "autocomplete": "nickname",
+                }
+            ),
+            "full_name": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                    "placeholder": "Иванов Иван Иванович",
+                    "autocomplete": "name",
+                }
+            ),
+            "about": forms.Textarea(
+                attrs={
+                    "class": "form-control",
+                    "rows": 4,
+                    "placeholder": "Что вы читаете и что любите.",
+                }
+            ),
+            "date_of_birth": forms.DateInput(
+                attrs={"class": "form-control", "type": "date"},
+                format="%Y-%m-%d",
+            ),
+            "avatar": forms.ClearableFileInput(
+                attrs={"class": "form-control", "accept": "image/*"}
+            ),
+        }
+
+    def clean_username(self):
+        """Имя необязательное — убираем лишние пробелы, пустое пишем как NULL."""
+        username = self.cleaned_data["username"] or ""
+        return " ".join(username.split()) or None
+
+    def clean_full_name(self):
+        """Убираем лишние пробелы в ФИО."""
+        return " ".join(self.cleaned_data["full_name"].split())

@@ -42,6 +42,7 @@
                         Все книги
                     </a>
                 </li>
+                {% if user.is_authenticated %}
                 <li class="nav-item">
                     <a
                         class="nav-link px-3{% if url_name == 'book_add' %} active{% endif %}"
@@ -51,12 +52,19 @@
                         Добавить книгу
                     </a>
                 </li>
+                {% endif %}
             </ul>
 
             <ul class="navbar-nav">
                 {% if user.is_authenticated %}
                 <li class="nav-item">
-                    <span class="navbar-text px-3">{{ user.email }}</span>
+                    <a
+                        class="nav-link px-3{% if url_name == 'profile' %} active{% endif %}"
+                        {% if url_name == 'profile' %}aria-current="page"{% endif %}
+                        href="{% url 'profile' %}"
+                    >
+                        {{ user.display_name }}
+                    </a>
                 </li>
                 <li class="nav-item">
                     <form method="post" action="{% url 'logout' %}" class="d-inline">

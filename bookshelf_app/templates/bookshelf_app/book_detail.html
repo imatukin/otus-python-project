@@ -19,6 +19,7 @@
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-start gap-3">
                 <h1 class="h3 card-title mb-1">{{ book.title }}</h1>
+                {% if user.is_authenticated %}
                 <div class="d-flex gap-2 flex-shrink-0">
                     <a href="{% url 'book_edit' book.id %}" class="btn btn-outline-primary btn-sm">
                         Редактировать
@@ -27,6 +28,7 @@
                         Удалить
                     </a>
                 </div>
+                {% endif %}
             </div>
             <p class="text-muted mb-3">
                 {{ book.author.name }}{% if book.published_year %} · {{ book.published_year }} г.{% endif %}
@@ -53,11 +55,10 @@
             {% endif %}
         </div>
 
-        {% if book.added_by %}
         <div class="card-footer bg-white border-top-0 small text-muted">
-            Добавил: {{ book.added_by.nickname }}
+            Добавил:
+            <a href="{{ book.added_by.get_absolute_url }}">{{ book.added_by.display_name }}</a>
         </div>
-        {% endif %}
     </div>
 
     <div class="d-flex align-items-center justify-content-between mb-3">
@@ -70,7 +71,9 @@
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-start mb-2">
                 <div>
-                    <span class="fw-semibold">{{ review.reader.nickname }}</span>
+                    <a class="fw-semibold" href="{{ review.reader.get_absolute_url }}">
+                        {{ review.reader.display_name }}
+                    </a>
                     <span class="text-muted small ms-2">{{ review.created_at|date:"d.m.Y H:i" }}</span>
                 </div>
                 <span class="rating" title="Оценка: {{ review.rating }} из 5">

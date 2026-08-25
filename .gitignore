@@ -144,3 +144,8 @@ cython_debug/
 **/*.sqlite3
 **/*.sqlite3-journal
 /fixtures/bookshelf_export.json
+
+# Загруженные пользователями файлы
+/media/
+
+/TODO.md

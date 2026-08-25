@@ -35,9 +35,10 @@
                     <p class="card-text text-muted fst-italic">Описание пока не добавлено.</p>
                     {% endif %}
 
-                    {% if book.added_by %}
-                    <p class="small text-muted mb-0">Добавил: {{ book.added_by.nickname }}</p>
-                    {% endif %}
+                    <p class="small text-muted mb-0">
+                        Добавил:
+                        <a href="{{ book.added_by.get_absolute_url }}">{{ book.added_by.display_name }}</a>
+                    </p>
 
                     {% with reviews_count=book.reviews.count %}
                     {% if reviews_count %}

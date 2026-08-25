@@ -1,6 +1,6 @@
 from django.contrib import admin, messages
 
-from .models import MAX_RATING, Author, Book, Genre, Reader, Review
+from .models import MAX_RATING, Author, Book, Genre, Review
 
 
 @admin.register(Author)
@@ -10,7 +10,7 @@ class AuthorAdmin(admin.ModelAdmin):
 
 @admin.register(Book)
 class BookAdmin(admin.ModelAdmin):
-    list_display = ("title", "author", "published_year", "genres_list")
+    list_display = ("title", "author", "published_year", "genres_list", "added_by")
     ordering = ("author",)
     list_filter = ("genres",)
     search_fields = ("title", "author__name")
@@ -23,13 +23,6 @@ class BookAdmin(admin.ModelAdmin):
 
 @admin.register(Genre)
 class GenreAdmin(admin.ModelAdmin):
-    pass
-
-
-@admin.register(Reader)
-class ReaderAdmin(admin.ModelAdmin):
-    list_display = ("full_name", "nickname", "birth_date")
-    search_fields = ("full_name", "nickname")
     pass
 
 

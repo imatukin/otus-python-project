@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.urls import reverse
@@ -30,20 +31,6 @@ class Genre(models.Model):
         return self.name
 
 
-class Reader(models.Model):
-    """Читатель — пользователь сайта."""
-    full_name = models.CharField('ФИО', max_length=200)
-    nickname = models.CharField('Ник', max_length=50, unique=True)
-    about = models.TextField('О себе', blank=True)
-    birth_date = models.DateField('Дата рождения', blank=True, null=True)
-
-    def __repr__(self):
-        return f'{self.nickname} ({self.full_name})'
-
-    def __str__(self):
-        return self.nickname
-
-
 class Book(models.Model):
     """Книга из общего каталога."""
     title = models.CharField('Название', max_length=200)
@@ -60,11 +47,10 @@ class Book(models.Model):
     )
     published_year = models.PositiveIntegerField('Год издания', blank=True, null=True)
     added_by = models.ForeignKey(
-        Reader,
-        on_delete=models.SET_NULL,
+        settings.AUTH_USER_MODEL,
+        verbose_name='Кто добавил',
+        on_delete=models.CASCADE,
         related_name='added_books',
-        blank=True,
-        null=True,
     )
 
     def __repr__(self):
@@ -86,7 +72,8 @@ class Review(models.Model):
         related_name='reviews',
     )
     reader = models.ForeignKey(
-        Reader,
+        settings.AUTH_USER_MODEL,
+        verbose_name='Читатель',
         on_delete=models.CASCADE,
         related_name='reviews',
     )

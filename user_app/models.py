@@ -1,7 +1,7 @@
-from encodings import search_function
-
-from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
+from django.db import models
+from django.urls import reverse
+
 
 class CustomUserManager(BaseUserManager):
 
@@ -26,9 +26,11 @@ class CustomUserManager(BaseUserManager):
         if extra_fields.get('is_active') is not True:
             raise ValueError('Superuser must have is_active=True')
 
-        return self.create_user(email,password, **extra_fields)
+        return self.create_user(email, password, **extra_fields)
+
 
 class CustomUser(AbstractUser):
+    """Пользователь сайта, он же читатель."""
     username = models.CharField(
         max_length=150,
         unique=False,
@@ -39,6 +41,15 @@ class CustomUser(AbstractUser):
     email = models.EmailField(
         unique=True,
         verbose_name='Email пользователя'
+    )
+    full_name = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name='ФИО'
+    )
+    about = models.TextField(
+        blank=True,
+        verbose_name='О себе'
     )
     date_of_birth = models.DateField(
         blank=True,
@@ -57,5 +68,17 @@ class CustomUser(AbstractUser):
 
     objects = CustomUserManager()
 
+    @property
+    def display_name(self):
+        """Как показываем читателя: ник, а если его нет — email целиком."""
+        return self.username or self.email
+
+    def __repr__(self):
+        return f'{self.email} ({self.username})'
+
     def __str__(self):
-        return f"{self.email} {self.username} ({self.date_of_birth})"
+        return self.display_name
+
+    def get_absolute_url(self):
+        """Публичная страница читателя."""
+        return reverse('user_detail', args=[self.pk])

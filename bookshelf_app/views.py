@@ -1,3 +1,4 @@
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.urls import reverse, reverse_lazy
 from django.views.generic import (
@@ -67,6 +68,14 @@ class BookListView(BookBase, ListView):
     context_object_name = "books"
     extra_context = {"page_title": "Все книги."}
 
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .select_related("author", "added_by")
+            .prefetch_related("genres")
+        )
+
 
 class BookDetailView(BookObjectBase, DetailView):
     """Страница одной книги: информация о книге и список отзывов."""
@@ -76,12 +85,14 @@ class BookDetailView(BookObjectBase, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["reviews"] = self.object.reviews.all().order_by("-created_at")
+        context["reviews"] = (
+            self.object.reviews.select_related("reader").order_by("-created_at")
+        )
         context["page_title"] = self.object.title
         return context
 
 
-class BookCreateView(BookBase, SuccessMessageMixin, CreateView):
+class BookCreateView(LoginRequiredMixin, BookBase, SuccessMessageMixin, CreateView):
     """Добавление книги в общий каталог."""
 
     form_class = BookForm
@@ -101,8 +112,13 @@ class BookCreateView(BookBase, SuccessMessageMixin, CreateView):
         )
         return context
 
+    def form_valid(self, form):
+        """Книгу в каталог добавляет тот, кто заполнил форму."""
+        form.instance.added_by = self.request.user
+        return super().form_valid(form)
 
-class BookUpdateView(BookObjectBase, SuccessMessageMixin, UpdateView):
+
+class BookUpdateView(LoginRequiredMixin, BookObjectBase, SuccessMessageMixin, UpdateView):
     """Редактирование книги."""
 
     form_class = BookForm
@@ -123,7 +139,7 @@ class BookUpdateView(BookObjectBase, SuccessMessageMixin, UpdateView):
         return context
 
 
-class BookDeleteView(BookObjectBase, SuccessMessageMixin, DeleteView):
+class BookDeleteView(LoginRequiredMixin, BookObjectBase, SuccessMessageMixin, DeleteView):
     """Удаление книги."""
 
     template_name = "bookshelf_app/book_delete.html"

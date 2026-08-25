@@ -1,7 +1,7 @@
 import datetime
 
 from django import forms
-from bookshelf_app.models import Author, Book, Genre, Reader
+from bookshelf_app.models import Author, Book, Genre
 
 MIN_PUBLISHED_YEAR = 1450
 
@@ -17,18 +17,15 @@ class BookForm(forms.ModelForm):
             "genres",
             "published_year",
             "description",
-            "added_by",
         )
         labels = {
             "author": "Автор",
             "genres": "Жанры",
-            "added_by": "Кто добавил",
         }
         help_texts = {
             "title": "Название книги.",
             "genres": "Выберите жанры.",
             "published_year": "Год издания.",
-            "added_by": "Читатель, который добавляет книгу в каталог.",
         }
         widgets = {
             "title": forms.TextInput(
@@ -54,7 +51,6 @@ class BookForm(forms.ModelForm):
                     "placeholder": "Про что эта книга.",
                 }
             ),
-            "added_by": forms.Select(attrs={"class": "form-select"}),
         }
         error_messages = {
             "title": {"required": "Название книги не заполнено."},
@@ -67,8 +63,6 @@ class BookForm(forms.ModelForm):
         self.fields["author"].queryset = Author.objects.order_by("name")
         self.fields["author"].empty_label = "— выберите автора —"
         self.fields["genres"].queryset = Genre.objects.order_by("name")
-        self.fields["added_by"].queryset = Reader.objects.order_by("nickname")
-        self.fields["added_by"].empty_label = "— не указан —"
 
     def clean_title(self):
         """Убираем лишние пробелы в названии."""

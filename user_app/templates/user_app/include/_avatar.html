@@ -1,0 +1,17 @@
+{# Аватар читателя; если картинки нет — кружок с первой буквой имени. #}
+{% if reader.avatar %}
+<img
+    src="{{ reader.avatar.url }}"
+    alt="Аватар {{ reader.display_name }}"
+    class="rounded-circle object-fit-cover"
+    style="width: {{ avatar_size|default:'96' }}px; height: {{ avatar_size|default:'96' }}px; object-fit: cover;"
+/>
+{% else %}
+<span
+    class="rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center"
+    style="width: {{ avatar_size|default:'96' }}px; height: {{ avatar_size|default:'96' }}px; font-size: 2rem;"
+    aria-hidden="true"
+>
+    {{ reader.display_name|first|upper }}
+</span>
+{% endif %}
