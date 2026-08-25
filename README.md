@@ -37,7 +37,7 @@ source .venv/bin/activate
 
 ## Миграции
 ```shell
-python manage.py makemigrations bookshelf_app
+python manage.py makemigrations
 python manage.py migrate
 ```
 
