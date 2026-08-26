@@ -1,3 +1,5 @@
+"""Тесты представлений каталога книг."""
+
 import pytest
 from django.urls import reverse
 
@@ -45,10 +47,11 @@ class TestBookListView:
     @pytest.mark.django_db
     def test_empty_list(self, client):
         response = client.get(reverse("books"))
-        assert list(response.context["books"]) == []
+        assert not list(response.context["books"])
 
     @pytest.mark.django_db
-    def test_shows_all_books(self, client, books, book_of_user_2):
+    # book_of_user_2 нужен как данные в базе, обращаться к нему в тесте не требуется.
+    def test_shows_all_books(self, client, books, book_of_user_2):  # pylint: disable=unused-argument
         response = client.get(reverse("books"))
         assert response.context["books"].count() == len(books) + 1
 

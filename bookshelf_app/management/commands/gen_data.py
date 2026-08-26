@@ -1,3 +1,5 @@
+"""Команда наполнения базы тестовыми данными."""
+
 import random
 
 from django.contrib.auth import get_user_model
@@ -13,6 +15,8 @@ DEMO_PASSWORD = "12345"
 
 
 class Command(BaseCommand):
+    """Заполняет базу демонстрационными жанрами, авторами, книгами и отзывами."""
+
     help = "Генерация данных для БД"
 
     def handle(self, *args, **options):

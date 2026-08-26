@@ -1,11 +1,15 @@
+"""Модель пользователя сайта и её менеджер."""
+
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.urls import reverse
 
 
 class CustomUserManager(BaseUserManager):
+    """Менеджер пользователей: вместо логина — email."""
 
     def create_user(self, email, password=None, **extra_fields):
+        """Создаёт обычного пользователя по email и паролю."""
         if not email:
             raise ValueError('Почта должна быть указана!')
         email = self.normalize_email(email)
@@ -15,6 +19,7 @@ class CustomUserManager(BaseUserManager):
         return user
 
     def create_superuser(self, email, password=None, **extra_fields):
+        """Создаёт суперпользователя (для createsuperuser и тестов)."""
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         extra_fields.setdefault('is_active', True)

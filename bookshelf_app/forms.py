@@ -1,3 +1,5 @@
+"""Формы каталога книг."""
+
 import datetime
 
 from django import forms

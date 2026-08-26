@@ -1,3 +1,5 @@
+"""Представления каталога: список книг, страница книги и её редактирование."""
+
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.urls import reverse, reverse_lazy
@@ -18,10 +20,13 @@ class Breadcrumbs:
     """Цепочка навигации."""
 
     def get_breadcrumbs(self):
+        """Базовая цепочка — только ссылка на главную."""
         return [{"title": "Главная", "url": reverse("index")}]
 
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
+        """Кладёт цепочку навигации в контекст шаблона."""
+        # Примесь всегда используется вместе с CBV, поэтому get_context_data у super() есть.
+        context = super().get_context_data(**kwargs)  # pylint: disable=no-member
         context["breadcrumbs"] = self.get_breadcrumbs()
         return context
 
@@ -54,6 +59,9 @@ class BookBase(Breadcrumbs):
 
 class BookObjectBase(BookBase):
     """Базовая view для страниц конкретной книги."""
+
+    # self.object появляется из SingleObjectMixin у конкретных view.
+    # pylint: disable=no-member
 
     def get_breadcrumbs(self):
         return super().get_breadcrumbs() + [

@@ -1,3 +1,5 @@
+"""Тесты форм каталога книг."""
+
 import datetime
 
 import pytest

@@ -1,3 +1,5 @@
+"""Админка пользователей."""
+
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
@@ -6,6 +8,8 @@ from user_app.models import CustomUser
 
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
+    """Пользователи в админке."""
+
     list_display = ("email", "username", "full_name", "date_of_birth", "is_staff")
     search_fields = ("email", "username", "full_name")
     ordering = ("email",)

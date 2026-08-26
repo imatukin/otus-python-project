@@ -1,3 +1,5 @@
+"""Маршруты каталога книг."""
+
 from django.urls import path
 
 from bookshelf_app.views import (

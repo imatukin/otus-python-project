@@ -1,3 +1,5 @@
+"""Общие фикстуры для тестов каталога книг."""
+
 import datetime
 
 import pytest
@@ -18,6 +20,7 @@ def password():
 
 @pytest.fixture
 def user_1():
+    """Обычный читатель."""
     return CustomUser.objects.create_user(
         email="user_1@mail.ru",
         password=PASSWORD,
@@ -27,6 +30,7 @@ def user_1():
 
 @pytest.fixture
 def user_2():
+    """Второй читатель — для проверок чужих объектов."""
     return CustomUser.objects.create_user(
         email="user_2@mail.ru",
         password=PASSWORD,
@@ -36,6 +40,7 @@ def user_2():
 
 @pytest.fixture
 def superuser():
+    """Администратор сайта."""
     return CustomUser.objects.create_superuser(
         email="admin@mail.ru",
         password=PASSWORD,
@@ -59,6 +64,7 @@ def auth_client_2(client, user_2):
 
 @pytest.fixture
 def admin_auth_client(client, superuser):
+    """Клиент, залогиненный под администратором."""
     client.force_login(superuser)
     return client
 
@@ -67,6 +73,7 @@ def admin_auth_client(client, superuser):
 
 @pytest.fixture
 def author():
+    """Автор с заполненной биографией и датой рождения."""
     return Author.objects.create(
         name="Михаил Булгаков",
         bio="Русский писатель и драматург.",
@@ -76,21 +83,25 @@ def author():
 
 @pytest.fixture
 def author_2():
+    """Второй автор — минимально заполненный."""
     return Author.objects.create(name="Фёдор Достоевский")
 
 
 @pytest.fixture
 def genre():
+    """Жанр «Роман»."""
     return Genre.objects.create(name="Роман")
 
 
 @pytest.fixture
 def genre_2():
+    """Второй жанр — для книг с несколькими жанрами."""
     return Genre.objects.create(name="Фантастика")
 
 
 @pytest.fixture
 def genres(genre, genre_2):
+    """Пара жанров списком."""
     return [genre, genre_2]
 
 
@@ -98,6 +109,7 @@ def genres(genre, genre_2):
 
 @pytest.fixture
 def book(author, genre, user_1):
+    """Книга, добавленная user_1."""
     book = Book.objects.create(
         title="Мастер и Маргарита",
         description="Роман о добре и зле.",
@@ -141,6 +153,7 @@ def books(author, genre, user_1):
 
 @pytest.fixture
 def review(book, user_2):
+    """Отзыв user_2 на книгу user_1."""
     return Review.objects.create(
         book=book,
         reader=user_2,
@@ -151,6 +164,7 @@ def review(book, user_2):
 
 @pytest.fixture
 def reviews(book, user_1, user_2):
+    """Несколько отзывов на одну книгу — для списка отзывов."""
     return [
         Review.objects.create(book=book, reader=reader, text=text, rating=rating)
         for reader, text, rating in (
@@ -189,6 +203,8 @@ def _protect_project_db(request):
         yield
         return
 
+    # Импорт внутри фикстуры: Django настраивается позже импорта conftest.
+    # pylint: disable=import-outside-toplevel
     from django.conf import settings
     from django.db import connections
 

@@ -1,0 +1,23 @@
+[MAIN]
+load-plugins = pylint_django
+django-settings-module = config.settings
+ignore-paths = .*/migrations/.*,\.venv/.*
+
+[FORMAT]
+max-line-length = 120
+
+[DESIGN]
+# Иерархии Django CBV и ModelForm сами по себе глубокие.
+max-parents = 12
+min-public-methods = 0
+
+[MESSAGES CONTROL]
+disable =
+    # Параметр теста всегда «перекрывает» имя фикстуры pytest.
+    redefined-outer-name,
+    duplicate-code
+
+[BASIC]
+# Тестам докстринги не требуем: имя test_* описывает себя само.
+no-docstring-rgx = ^(_|test_)
+good-names = pk,qs,i,k,ex,Run,_
