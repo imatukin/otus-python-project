@@ -321,6 +321,40 @@ spelling = ["pyenchant (>=3.2,<4.0)"]
 testutils = ["gitpython (>3)"]
 
 [[package]]
+name = "pylint-django"
+version = "2.8.0"
+description = "A Pylint plugin to help Pylint understand the Django web framework"
+optional = false
+python-versions = "<4.0,>=3.9"
+groups = ["main"]
+files = [
+    {file = "pylint_django-2.8.0-py3-none-any.whl", hash = "sha256:706eb2cc8d7692236be9fd033a341042afe3bbbf99df9234a659db931016ef5d"},
+    {file = "pylint_django-2.8.0.tar.gz", hash = "sha256:42accea9098e4a3298b4bfbae0e4da81f909f8bff0deda9485efbd6035a86d6a"},
+]
+
+[package.dependencies]
+pylint = ">=3.0,<5"
+pylint-plugin-utils = ">=0.8"
+
+[package.extras]
+with-django = ["Django (>=2.2)"]
+
+[[package]]
+name = "pylint-plugin-utils"
+version = "0.9.0"
+description = "Utilities and helpers for writing Pylint plugins"
+optional = false
+python-versions = "<4.0,>=3.9"
+groups = ["main"]
+files = [
+    {file = "pylint_plugin_utils-0.9.0-py3-none-any.whl", hash = "sha256:16e9b84e5326ba893a319a0323fcc8b4bcc9c71fc654fcabba0605596c673818"},
+    {file = "pylint_plugin_utils-0.9.0.tar.gz", hash = "sha256:5468d763878a18d5cc4db46eaffdda14313b043c962a263a7d78151b90132055"},
+]
+
+[package.dependencies]
+pylint = ">=1.7"
+
+[[package]]
 name = "pytest"
 version = "9.1.1"
 description = "pytest: simple powerful testing with Python"
@@ -422,5 +456,5 @@ files = [
 
 [metadata]
 lock-version = "2.1"
-python-versions = ">=3.13"
-content-hash = "b55ada15ae69f28c5262bb83354b440b48dd04f7d4dabe15465bc2e80d70579e"
+python-versions = ">=3.13,<4.0"
+content-hash = "705cf2083607527c98224b7bed89ecbd15487ff3e1026dfc171e773cd5c121ac"
