@@ -6,19 +6,31 @@ from bookshelf_app.models import Book
 
 # Это дневник, прочитанных книг.
 
-def test_index_view(client):
-    """Тест главной страницы"""
-    url = reverse('index')
-    response = client.get(url)
-    assert response.status_code == 200
-    assert "Это дневник, прочитанных книг." in response.content.decode()
+class TestIndexView:
+    """Главная страница."""
+
+    def test_status_and_template(self, client):
+        response = client.get(reverse("index"))
+        assert response.status_code == 200
+        assert "bookshelf_app/index.html" in [t.name for t in response.templates]
+
+    def test_greeting_in_content(self, client):
+        response = client.get(reverse("index"))
+        assert "Это дневник, прочитанных книг." in response.content.decode()
 
 
-def test_about_view(client):
-    """Страница «О сайте» открывается и содержит хлебные крошки."""
-    response = client.get(reverse("about"))
-    assert response.status_code == 200
-    assert response.context["breadcrumbs"][-1]["title"] == "О сайте"
+class TestAboutView:
+    """Страница «О сайте»."""
+
+    def test_status_and_template(self, client):
+        response = client.get(reverse("about"))
+        assert response.status_code == 200
+        assert "bookshelf_app/about.html" in [t.name for t in response.templates]
+
+    def test_breadcrumbs(self, client):
+        response = client.get(reverse("about"))
+        titles = [crumb["title"] for crumb in response.context["breadcrumbs"]]
+        assert titles == ["Главная", "О сайте"]
 
 
 class TestBookListView:
