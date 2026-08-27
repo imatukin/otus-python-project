@@ -1,3 +1,5 @@
+"""Точка входа Celery: приложение читает настройки из Django."""
+
 import os
 from celery import Celery
 

@@ -14,7 +14,7 @@ from django.views.generic import (
 
 from bookshelf_app.forms import BookForm
 from bookshelf_app.models import Book
-from .tasks import send_mail_task
+from .tasks import log_new_book_task
 
 
 class Breadcrumbs:
@@ -124,12 +124,16 @@ class BookCreateView(LoginRequiredMixin, BookBase, SuccessMessageMixin, CreateVi
     def form_valid(self, form):
         """Книгу в каталог добавляет тот, кто заполнил форму."""
         form.instance.added_by = self.request.user
-        send_mail_task.delay(
-            rec_email='user@gmail.com',
-            subject='Новая книга создана',
-            message=f'Книга была {form.instance.title} создана',
+        response = super().form_valid(form)
+
+        book = self.object
+        log_new_book_task.delay(
+            book_id=book.pk,
+            title=book.title,
+            author=str(book.author),
+            added_by=str(book.added_by),
         )
-        return super().form_valid(form)
+        return response
 
 
 class BookUpdateView(LoginRequiredMixin, BookObjectBase, SuccessMessageMixin, UpdateView):

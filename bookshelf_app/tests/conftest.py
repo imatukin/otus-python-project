@@ -188,6 +188,19 @@ def book_form_data(author, genre):
     }
 
 
+# --- Celery ---
+
+@pytest.fixture(autouse=True)
+def _celery_eager(settings):
+    """Все тесты выполняют задачи Celery синхронно, без брокера.
+
+    `.delay()` в тестах не должен ходить в Redis: задача выполняется сразу
+    в том же процессе, а исключения из неё пробрасываются в тест.
+    """
+    settings.CELERY_TASK_ALWAYS_EAGER = True
+    settings.CELERY_TASK_EAGER_PROPAGATES = True
+
+
 # --- Защита данных проекта ---
 
 @pytest.fixture(autouse=True)

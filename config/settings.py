@@ -12,8 +12,6 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 
-from django.conf.global_settings import EMAIL_BACKEND, EMAIL_USE_TLS, EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -130,14 +128,40 @@ MEDIA_ROOT = BASE_DIR / 'media'
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND = 'django-db'
 CELERY_TASK_IGNORE_RESULT = False
+CELERY_TIMEZONE = TIME_ZONE
+# Не заглушать настройку логирования Django в воркере — иначе logger задач молчит.
+CELERY_WORKER_HIJACK_ROOT_LOGGER = False
+# Ждать Redis при старте воркера, а не падать сразу (Celery 6 требует явной настройки).
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 
-# Email
-#EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-
-# Эти данные на проде надо убирать в переменные окружения среды
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'admin@gmail.com'
-EMAIL_HOST_PASSWORD = ''
+# Логирование
+# Задачи пишут через logging, поэтому вывод в консоль настраиваем явно:
+# так сообщения видно и в воркере celery, и в runserver.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'simple': {
+            'format': '[{asctime}] {levelname} {name}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+    },
+    'loggers': {
+        'bookshelf_app': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'celery.task': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
