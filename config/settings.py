@@ -15,7 +15,6 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
@@ -26,7 +25,6 @@ SECRET_KEY = 'django-insecure-7-!)vq&+2v#9u)3wrvqf^!hf$tzus#d0(dgkps%!hi00c95)x&
 DEBUG = True
 
 ALLOWED_HOSTS = []
-
 
 # Application definition
 
@@ -40,6 +38,8 @@ INSTALLED_APPS = [
 
     'bookshelf_app.apps.BookshelfAppConfig',
     'user_app.apps.UserAppConfig',
+
+    'django_celery_results',
 ]
 
 AUTH_USER_MODEL = 'user_app.CustomUser'
@@ -77,7 +77,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
@@ -105,7 +104,6 @@ DATABASES = {
 # Проверка сложности пароля отключена: подойдёт любой непустой.
 AUTH_PASSWORD_VALIDATORS = []
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
@@ -117,7 +115,6 @@ USE_I18N = True
 
 USE_TZ = True
 
-
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
@@ -126,3 +123,8 @@ STATIC_URL = 'static/'
 # Пользовательские файлы (аватары).
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# Celery
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'django-db'
+CELERY_TASK_IGNORE_RESULT = False
