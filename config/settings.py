@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -125,7 +126,9 @@ MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 # Celery
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
+# Адрес брокера в контейнере приходит из окружения (хост `redis`),
+# при локальном запуске работает значение по умолчанию.
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = 'django-db'
 CELERY_TASK_IGNORE_RESULT = False
 CELERY_TIMEZONE = TIME_ZONE

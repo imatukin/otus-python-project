@@ -52,9 +52,43 @@ python manage.py gen_data
 python manage.py createsuperuser
 ```
 
-## Запуск сервера
+## Запуск в докере (всё сразу)
+Приложению нужны три процесса: Redis (брокер), веб-сервер и celery-воркер.
+`docker compose` поднимает их вместе:
 ```shell
-python manage.py runserver
+docker compose up --build      # первый запуск
+docker compose up -d           # дальше — в фоне
+```
+Сайт — http://localhost:8000/, миграции применяются автоматически при старте.
+
+```shell
+docker compose ps              # состояние сервисов
+docker compose logs -f worker  # сообщения фоновых задач
+docker compose down            # остановить всё
+```
+
+Папка проекта примонтирована в контейнеры, поэтому `db.sqlite3` и `media/`
+остаются на хосте, а правки кода подхватываются автоперезагрузкой runserver.
+Management-команды выполняются в контейнере:
+```shell
+docker compose exec web python manage.py createsuperuser
+docker compose exec web python manage.py gen_data
+```
+
+Если uid на хосте не 1000, его надо передать при сборке, иначе созданные
+в контейнере файлы будут чужими:
+```shell
+APP_UID=$(id -u) APP_GID=$(id -g) docker compose build
+```
+
+
+## Запуск без докера
+Сервер и воркер запускаются в отдельных терминалах, Redis — из докера:
+```shell
+docker compose up -d redis           # только брокер
+
+python manage.py runserver           # первый терминал
+celery -A config worker -l info      # второй терминал
 ```
 
 

@@ -1,0 +1,13 @@
+.git
+.gitignore
+.idea
+.venv
+__pycache__
+**/__pycache__
+*.py[cod]
+.pytest_cache
+db.sqlite3
+db.sqlite3-journal
+media
+*.log
+TODO.md

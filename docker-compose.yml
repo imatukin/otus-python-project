@@ -1,9 +1,14 @@
+# Полный стек приложения: брокер, веб-сервер и celery-воркер.
+# Запуск: docker compose up --build
+name: bookshelf
+
 services:
   redis:
     image: redis:7-alpine
-    container_name: redis
+    container_name: bookshelf-redis
     restart: unless-stopped
     ports:
+      # Порт наружу нужен, чтобы приложение можно было запускать и без докера.
       - "6379:6379"
     command: redis-server --appendonly yes
     volumes:
@@ -13,6 +18,59 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+
+  web:
+    build:
+      context: .
+      args:
+        APP_UID: "${APP_UID:-1000}"
+        APP_GID: "${APP_GID:-1000}"
+    image: bookshelf-app
+    container_name: bookshelf-web
+    restart: unless-stopped
+    # Миграции применяет только web — воркер ждёт, пока он поднимется.
+    command: >
+      sh -c "python manage.py migrate --noinput
+      && python manage.py runserver 0.0.0.0:8000"
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+    volumes:
+      # Код монтируем с хоста: работает автоперезагрузка runserver,
+      # а db.sqlite3 и media/ остаются в папке проекта.
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  worker:
+    # Тот же образ, что и у web — собирается один раз.
+    build:
+      context: .
+      args:
+        APP_UID: "${APP_UID:-1000}"
+        APP_GID: "${APP_GID:-1000}"
+    image: bookshelf-app
+    container_name: bookshelf-worker
+    restart: unless-stopped
+    command: celery -A config worker -l info
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+    volumes:
+      - .:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+      # Воркеру нужна база с применёнными миграциями (django_celery_results).
+      web:
+        condition: service_healthy
 
 volumes:
   redis_data:
