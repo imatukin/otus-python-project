@@ -43,16 +43,8 @@ python manage.py migrate
 ```
 
 ## Демо данные
-В папке `./fixtures` хранятся данные для предварительного наполнения базы и демо-данные.
-Для загрузки данных в базу можно использовать импорт или генерацию случайных данных:
+Для предварительного наполнения базы используется генерация случайных данных:
 ```shell
-# Импорт данных в новую базу
-python manage.py loaddata ./fixtures/bookshelf_basedata_fixtures.json # Минимальное наполнение для работы
-python manage.py loaddata ./fixtures/bookshelf_demodata_fixtures.json # Примеры данных для тестов и наглядности
-
-# Экспорт данных
-python manage.py dumpdata bookshelf_app --indent 4 > ./fixtures/bookshelf_export.json
-
 # Генерация случайных данных
 python manage.py gen_data
 
@@ -64,11 +56,6 @@ python manage.py createsuperuser
 ```shell
 python manage.py runserver
 ```
-
-
-- [Команды проверки моделей в shell](test-shell-models.md)
-
-- ![Результат выполнения скриптов](screens/test-shell-models.png)
 
 
 # Этапы разработки
