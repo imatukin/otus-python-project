@@ -1,7 +1,8 @@
 image: python:3.14
 
-tags:
-  - myrunner
+default:
+  tags:
+    - myrunner
 
 stages:
   - testing
