@@ -22,6 +22,14 @@ lint:
 
 test:
   stage: testing
+  services:
+    - postgres
+  variables:
+    POSTGRES_USER: gitlabuser
+    POSTGRES_PASSWORD: gitlabpass
+    POSTGRES_DB: gitlabdb
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: 5432
   script:
     - make coverage
 
