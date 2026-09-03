@@ -1,5 +1,9 @@
 image: python:3.14
 
+default:
+  tags:
+    - my-docker-runner
+
 stages:
   - testing
   - build
