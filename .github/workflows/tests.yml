@@ -11,6 +11,28 @@ jobs:
       matrix:
         python-version: ["3.13", "3.14"]
 
+    services:
+      postgres:
+        image: postgres:latest
+        env:
+          POSTGRES_USER: githubuser
+          POSTGRES_PASSWORD: githubpass
+          POSTGRES_DB: githubdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 6
+
+    env:
+      POSTGRES_USER: githubuser
+      POSTGRES_PASSWORD: githubpass
+      POSTGRES_DB: githubdb
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
@@ -24,4 +46,4 @@ jobs:
         poetry install
     - name: Run Tests
       run: |
-        poetry run pytest
+        make coverage

@@ -19,4 +19,4 @@ jobs:
         poetry install
     - name: Run Linter
       run: |
-        make coverage
+        make lint
