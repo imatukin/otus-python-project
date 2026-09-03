@@ -30,8 +30,15 @@ test:
     POSTGRES_DB: gitlabdb
     POSTGRES_HOST: postgres
     POSTGRES_PORT: 5432
+    COVERAGE_DIR: coverage-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA
   script:
-    - make coverage
+    - poetry run pytest -s --cov --cov-report html:$COVERAGE_DIR --cov-fail-under=95
+  artifacts:
+    name: $COVERAGE_DIR
+    paths:
+      - $COVERAGE_DIR
+    when: on_success
+    expire_in: 1 week
 
 build-job:
   stage: build
