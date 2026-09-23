@@ -9,7 +9,6 @@ services:
     container_name: bookshelf-redis
     restart: unless-stopped
     ports:
-      # Порт наружу нужен, чтобы приложение можно было запускать и без докера.
       - "6379:6379"
     command: redis-server --appendonly yes
     volumes:
@@ -29,6 +28,8 @@ services:
       POSTGRES_USER: "${POSTGRES_USER}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
       POSTGRES_DB: "${POSTGRES_DB}"
+    volumes:
+      - db_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -d ${POSTGRES_DB}", "ping"]
       interval: 5s
@@ -52,8 +53,6 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       POSTGRES_HOST: db
     volumes:
-      # Код монтируем с хоста: работает автоперезагрузка runserver,
-      # а db.sqlite3 и media/ остаются в папке проекта.
       - .:/app
     ports:
       - "8000:8000"
@@ -71,7 +70,6 @@ services:
 
   # Celery-воркер — выполняет фоновые задачи из очереди (лог о новой книге).
   worker:
-    # Тот же образ, что и у web — собирается один раз.
     build:
       context: .
       args:
@@ -96,3 +94,4 @@ services:
 
 volumes:
   redis_data:
+  db_data:

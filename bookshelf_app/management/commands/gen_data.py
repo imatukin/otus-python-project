@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from faker import Faker
 
-from bookshelf_app.models import Author, Book, Genre, Review
+from bookshelf_app.models import Author, Book, Genre, ReadingEntry, ReadingStatus, Review
 
 User = get_user_model()
 
@@ -15,7 +15,7 @@ DEMO_PASSWORD = "12345"
 
 
 class Command(BaseCommand):
-    """Заполняет базу демонстрационными жанрами, авторами, книгами и отзывами."""
+    """Заполняет базу демонстрационными данными: каталог, отзывы и дневники читателей."""
 
     help = "Генерация данных для БД"
 
@@ -71,6 +71,34 @@ class Command(BaseCommand):
 
                 books.append(book)
                 self.stdout.write(f"Создана книга {book.title}")
+
+        # Пара книг «требует дозаполнения» — как будто заведены быстрой формой из дневника
+        for book in random.sample(books, min(2, len(books))):
+            book.description = ""
+            book.published_year = None
+            book.genres.clear()
+            book.is_pending = True
+            book.save()
+            self.stdout.write(f"Книга «{book.title}» помечена как требующая дозаполнения")
+
+        # Генерация дневников: у каждого читателя несколько книг в разных статусах
+        for reader in readers:
+            for book in random.sample(books, random.randint(1, min(5, len(books)))):
+                entry = ReadingEntry(reader=reader, book=book)
+                entry.apply_status(random.choice(ReadingStatus.values))
+                entry.save()
+                self.stdout.write(
+                    f"{reader.display_name}: «{book.title}» — {entry.get_status_display()}"
+                )
+
+                # Иногда книгу перечитывают — это вторая запись в истории
+                if entry.status == ReadingStatus.READ and random.random() < 0.2:
+                    repeat = ReadingEntry(reader=reader, book=book)
+                    repeat.apply_status(ReadingStatus.READING)
+                    repeat.save()
+                    self.stdout.write(
+                        f"{reader.display_name} перечитывает «{book.title}»"
+                    )
 
         # Генерация отзывов читателей на случайные книги
         for reader in readers:

@@ -40,7 +40,7 @@
 
 ## Этапы
 
-### 1. Модели дневника
+### 1. Модели дневника ✅ сделано
 - `ReadingEntry` в `bookshelf_app/models.py`: FK `reader`, FK `book`,
   `status` (`planned` / `reading` / `read` / `abandoned`, `TextChoices`),
   `started_at`, `finished_at` (обе редактируемые), `created_at`, `updated_at`.

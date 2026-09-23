@@ -1,11 +1,14 @@
-"""Тесты моделей каталога книг."""
+"""Тесты моделей каталога книг и дневника чтения."""
+
+import datetime
 
 import pytest
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.urls import reverse
+from django.utils import timezone
 
-from bookshelf_app.models import Book, Genre, Review
+from bookshelf_app.models import Book, Genre, ReadingEntry, ReadingStatus, Review
 
 
 class TestAuthor:
@@ -73,6 +76,22 @@ class TestBook:
         assert book.genres.count() == 0
 
     @pytest.mark.django_db
+    def test_is_pending_is_false_by_default(self, book):
+        assert book.is_pending is False
+
+    @pytest.mark.django_db
+    def test_is_pending_book_keeps_only_title_and_author(self, author, user_1):
+        """Книга из быстрой формы: заполнены только название и автор."""
+        book = Book.objects.create(
+            title="Быстрая книга",
+            author=author,
+            added_by=user_1,
+            is_pending=True,
+        )
+        book.full_clean()
+        assert book.is_pending is True
+
+    @pytest.mark.django_db
     def test_deleted_with_user(self, book, user_1):
         """Книги удаляются вместе с пользователем (CASCADE)."""
         user_1.delete()
@@ -116,3 +135,108 @@ class TestReview:
     def test_deleted_with_book(self, review, book):
         book.delete()
         assert not Review.objects.filter(pk=review.pk).exists()
+
+
+
+class TestReadingEntry:
+    """Модель записи дневника."""
+
+    @pytest.mark.django_db
+    def test_str(self, entry):
+        assert str(entry) == "«Мастер и Маргарита» — читаю"
+
+    @pytest.mark.django_db
+    def test_repr(self, entry, user_1, book):
+        assert repr(entry) == f"ReadingEntry({user_1}, {book}, reading)"
+
+    @pytest.mark.django_db
+    def test_default_status_is_planned(self, book, user_1):
+        entry = ReadingEntry.objects.create(reader=user_1, book=book)
+        assert entry.status == ReadingStatus.PLANNED
+
+    @pytest.mark.django_db
+    def test_related_names(self, entry, book, user_1):
+        assert list(book.entries.all()) == [entry]
+        assert list(user_1.entries.all()) == [entry]
+
+    @pytest.mark.django_db
+    def test_timestamps_filled_automatically(self, entry):
+        assert entry.created_at is not None
+        assert entry.updated_at is not None
+
+    @pytest.mark.django_db
+    def test_book_may_be_read_several_times(self, book, user_1):
+        """Ограничения уникальности нет — ведём историю прочтений."""
+        first = ReadingEntry.objects.create(
+            reader=user_1, book=book, status=ReadingStatus.READ
+        )
+        second = ReadingEntry.objects.create(
+            reader=user_1, book=book, status=ReadingStatus.READING
+        )
+        assert book.entries.count() == 2
+        # Свежая запись идёт первой: сортировка по убыванию даты добавления.
+        assert list(book.entries.all()) == [second, first]
+
+    @pytest.mark.django_db
+    def test_deleted_with_book(self, entry, book):
+        book.delete()
+        assert not ReadingEntry.objects.filter(pk=entry.pk).exists()
+
+    @pytest.mark.django_db
+    def test_finished_before_started_is_invalid(self, book, user_1):
+        entry = ReadingEntry(
+            reader=user_1,
+            book=book,
+            status=ReadingStatus.READ,
+            started_at=datetime.date(2026, 5, 1),
+            finished_at=datetime.date(2026, 4, 1),
+        )
+        with pytest.raises(ValidationError):
+            entry.full_clean()
+
+    @pytest.mark.django_db
+    def test_same_dates_are_valid(self, book, user_1):
+        """Книгу можно прочитать за один день."""
+        entry = ReadingEntry(
+            reader=user_1,
+            book=book,
+            status=ReadingStatus.READ,
+            started_at=datetime.date(2026, 5, 1),
+            finished_at=datetime.date(2026, 5, 1),
+        )
+        entry.full_clean()
+
+
+class TestApplyStatus:
+    """Автоматическая простановка дат при смене статуса."""
+
+    today = datetime.date(2026, 5, 20)
+
+    def test_planned_leaves_dates_empty(self):
+        entry = ReadingEntry().apply_status(ReadingStatus.PLANNED, today=self.today)
+        assert (entry.started_at, entry.finished_at) == (None, None)
+
+    def test_reading_sets_started_at(self):
+        entry = ReadingEntry().apply_status(ReadingStatus.READING, today=self.today)
+        assert entry.started_at == self.today
+        assert entry.finished_at is None
+
+    @pytest.mark.parametrize("status", [ReadingStatus.READ, ReadingStatus.ABANDONED])
+    def test_read_and_abandoned_set_both_dates(self, status):
+        entry = ReadingEntry().apply_status(status, today=self.today)
+        assert entry.started_at == self.today
+        assert entry.finished_at == self.today
+
+    def test_existing_dates_are_kept(self):
+        """Проставленную руками дату автоматика не затирает."""
+        started = datetime.date(2025, 1, 1)
+        entry = ReadingEntry(started_at=started)
+        entry.apply_status(ReadingStatus.READ, today=self.today)
+        assert entry.started_at == started
+        assert entry.finished_at == self.today
+
+    @pytest.mark.django_db
+    def test_today_by_default(self, book, user_1):
+        entry = ReadingEntry(reader=user_1, book=book)
+        entry.apply_status(ReadingStatus.READING)
+        assert entry.started_at == timezone.localdate()

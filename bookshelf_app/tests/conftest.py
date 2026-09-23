@@ -4,7 +4,7 @@ import datetime
 
 import pytest
 
-from bookshelf_app.models import Author, Book, Genre, Review
+from bookshelf_app.models import Author, Book, Genre, ReadingEntry, ReadingStatus, Review
 from user_app.models import CustomUser
 
 PASSWORD = "12345"
@@ -170,6 +170,31 @@ def reviews(book, user_1, user_2):
         for reader, text, rating in (
             (user_1, "Понравилось.", 5),
             (user_2, "Тяжело читать.", 3),
+        )
+    ]
+
+
+# --- Дневник чтения ---
+
+@pytest.fixture
+def entry(book, user_1):
+    """Запись дневника: user_1 читает свою книгу."""
+    return ReadingEntry.objects.create(
+        reader=user_1,
+        book=book,
+        status=ReadingStatus.READING,
+        started_at=datetime.date(2026, 1, 10),
+    )
+
+
+@pytest.fixture
+def entries(book, book_of_user_2, user_1):
+    """Дневник user_1 с книгами в разных статусах."""
+    return [
+        ReadingEntry.objects.create(reader=user_1, book=item, status=status)
+        for item, status in (
+            (book, ReadingStatus.READ),
+            (book_of_user_2, ReadingStatus.PLANNED),
         )
     ]
 
