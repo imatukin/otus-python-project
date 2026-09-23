@@ -3,6 +3,7 @@
 name: bookshelf
 
 services:
+  # Redis — брокер очереди: через него web передаёт задачи воркеру.
   redis:
     image: redis:7-alpine
     container_name: bookshelf-redis
@@ -19,6 +20,7 @@ services:
       timeout: 3s
       retries: 5
 
+  # PostgreSQL — основная база проекта: книги, читатели, отзывы.
   db:
     image: postgres:latest
     ports:
@@ -33,6 +35,7 @@ services:
       timeout: 3s
       retries: 6
 
+  # Django — сам сайт на http://localhost:8000/ и накат миграций при старте.
   web:
     build:
       context: .
@@ -42,12 +45,12 @@ services:
     image: bookshelf-app
     container_name: bookshelf-web
     restart: unless-stopped
-    # Миграции применяет только web — воркер ждёт, пока он поднимется.
     command: >
       sh -c "python manage.py migrate --noinput
       && python manage.py runserver 0.0.0.0:8000"
     environment:
       CELERY_BROKER_URL: redis://redis:6379/0
+      POSTGRES_HOST: db
     volumes:
       # Код монтируем с хоста: работает автоперезагрузка runserver,
       # а db.sqlite3 и media/ остаются в папке проекта.
@@ -57,6 +60,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/')"]
       interval: 10s
@@ -64,6 +69,7 @@ services:
       retries: 10
       start_period: 30s
 
+  # Celery-воркер — выполняет фоновые задачи из очереди (лог о новой книге).
   worker:
     # Тот же образ, что и у web — собирается один раз.
     build:
@@ -77,12 +83,14 @@ services:
     command: celery -A config worker -l info
     environment:
       CELERY_BROKER_URL: redis://redis:6379/0
+      POSTGRES_HOST: db
     volumes:
       - .:/app
     depends_on:
       redis:
         condition: service_healthy
-      # Воркеру нужна база с применёнными миграциями (django_celery_results).
+      db:
+        condition: service_healthy
       web:
         condition: service_healthy
 
