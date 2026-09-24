@@ -1,5 +1,7 @@
 """Тесты шаблонов каталога книг: разметку разбираем через BeautifulSoup."""
 
+import datetime
+
 import pytest
 from bs4 import BeautifulSoup
 from django.urls import reverse
@@ -192,12 +194,113 @@ class TestBreadcrumbTemplate:
         ]
 
 
-class TestIndexTemplate:
-    """Главная страница."""
+class TestIndexGuestTemplate:
+    """Главная страница для гостя: приветствие и кнопки входа."""
 
     def test_heading(self, client):
         soup = get_soup(client.get(reverse("index")))
-        assert text_of(soup.main.h1) == "Это дневник, прочитанных книг."
+        assert text_of(soup.main.h1) == "Дневник читателя"
+
+    def test_buttons(self, client):
+        soup = get_soup(client.get(reverse("index")))
+        buttons = soup.select(".guest-actions a.btn")
+        assert [(text_of(button), button["href"]) for button in buttons] == [
+            ("Зарегистрироваться", reverse("register")),
+            ("Войти", reverse("login")),
+        ]
+
+    def test_catalog_link(self, client):
+        soup = get_soup(client.get(reverse("index")))
+        assert soup.main.select_one(f'a[href="{reverse("books")}"]') is not None
+
+    def test_no_diary(self, client):
+        soup = get_soup(client.get(reverse("index")))
+        assert not soup.select(".diary-column")
+
+
+class TestIndexDiaryTemplate:
+    """Главная страница для читателя — его дневник."""
+
+    def get_column(self, soup, status):
+        """Колонка дневника с нужным статусом."""
+        return soup.select_one(f'.diary-column[data-status="{status}"]')
+
+    def test_heading_and_total(self, auth_client, entries):
+        soup = get_soup(auth_client.get(reverse("index")))
+        assert text_of(soup.main.h1) == "Мой дневник"
+        assert text_of(soup.select_one(".diary-total")) == f"Книг в дневнике: {len(entries)}"
+
+    def test_no_guest_buttons(self, auth_client):
+        soup = get_soup(auth_client.get(reverse("index")))
+        assert soup.select_one(".guest-actions") is None
+
+    def test_columns_and_counters(self, auth_client, entries):  # pylint: disable=unused-argument
+        soup = get_soup(auth_client.get(reverse("index")))
+        columns = soup.select(".diary-column")
+        assert [
+            (text_of(item.h2), text_of(item.select_one(".diary-count"))) for item in columns
+        ] == [
+            ("Читаю сейчас", "0"),
+            ("Хочу прочитать", "1"),
+            ("Прочитано", "1"),
+            ("Брошено", "0"),
+        ]
+
+    def test_book_card(self, auth_client, entries, book):  # pylint: disable=unused-argument
+        soup = get_soup(auth_client.get(reverse("index")))
+        card = self.get_column(soup, "read").select_one(".diary-book")
+        link = card.select_one("h3 a")
+        assert text_of(link) == book.title
+        assert link["href"] == book.get_absolute_url()
+        assert book.author.name in text_of(card)
+
+    def test_empty_column_placeholder(self, auth_client, entries):  # pylint: disable=unused-argument
+        soup = get_soup(auth_client.get(reverse("index")))
+        assert "Здесь пока пусто." in text_of(self.get_column(soup, "reading"))
+
+    def test_empty_diary_hint(self, auth_client):
+        soup = get_soup(auth_client.get(reverse("index")))
+        hint = soup.select_one(".diary-empty")
+        assert hint.select_one("a")["href"] == reverse("books")
+
+    def test_no_hint_when_not_empty(self, auth_client, entry):  # pylint: disable=unused-argument
+        soup = get_soup(auth_client.get(reverse("index")))
+        assert soup.select_one(".diary-empty") is None
+
+    def test_dates_reading(self, auth_client, entry):  # pylint: disable=unused-argument
+        soup = get_soup(auth_client.get(reverse("index")))
+        dates = self.get_column(soup, "reading").select_one(".entry-dates")
+        assert text_of(dates) == "с 10.01.2026"
+
+    def test_dates_finished(self, auth_client, entry):
+        entry.apply_status("read", today=datetime.date(2026, 2, 3))
+        entry.save()
+        soup = get_soup(auth_client.get(reverse("index")))
+        dates = self.get_column(soup, "read").select_one(".entry-dates")
+        assert text_of(dates) == "10.01.2026 — 03.02.2026"
+
+    def test_dates_planned(self, auth_client, book, user_1):
+        entry = ReadingEntry.objects.create(reader=user_1, book=book)
+        soup = get_soup(auth_client.get(reverse("index")))
+        dates = self.get_column(soup, "planned").select_one(".entry-dates")
+        assert text_of(dates) == f"добавлено {entry.created_at:%d.%m.%Y}"
+
+    def test_history(self, auth_client, book, user_1):
+        ReadingEntry.objects.create(
+            reader=user_1, book=book, status="read",
+            started_at=datetime.date(2025, 1, 1), finished_at=datetime.date(2025, 2, 1),
+        )
+        ReadingEntry.objects.create(reader=user_1, book=book, status="reading")
+        soup = get_soup(auth_client.get(reverse("index")))
+        card = self.get_column(soup, "reading").select_one(".diary-book")
+        history = card.select_one(".diary-history")
+        assert text_of(history.summary) == "История прочтений (2)"
+        assert [text_of(item) for item in history.select("li")] == ["Прочитано 01.01.2025 — 01.02.2025"]
+        assert self.get_column(soup, "read").select_one(".diary-book") is None
+
+    def test_no_history_for_single_reading(self, auth_client, entry):  # pylint: disable=unused-argument
+        soup = get_soup(auth_client.get(reverse("index")))
+        assert soup.select_one(".diary-history") is None
 
 
 class TestAboutTemplate:

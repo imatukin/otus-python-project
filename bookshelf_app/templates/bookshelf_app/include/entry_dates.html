@@ -1,0 +1,18 @@
+{# Даты записи дневника. Ждёт entry; inline — без собственного абзаца (для истории прочтений). #}
+{% if inline %}
+<span class="text-muted entry-dates">
+{% else %}
+<p class="small text-muted mb-0 entry-dates">
+{% endif %}
+    {% if entry.started_at and entry.finished_at %}
+    {{ entry.started_at|date:"d.m.Y" }} — {{ entry.finished_at|date:"d.m.Y" }}
+    {% elif entry.started_at %}
+    с {{ entry.started_at|date:"d.m.Y" }}
+    {% else %}
+    добавлено {{ entry.created_at|date:"d.m.Y" }}
+    {% endif %}
+{% if inline %}
+</span>
+{% else %}
+</p>
+{% endif %}

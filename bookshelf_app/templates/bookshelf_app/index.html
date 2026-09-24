@@ -2,8 +2,92 @@
 
 {% block title %}Главная{% endblock %}
 
+{% block extra_css %}
+<style>
+    .diary-book + .diary-book {
+        border-top: 1px solid rgba(0, 0, 0, .125);
+    }
+
+    .diary-history summary {
+        cursor: pointer;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-    <div class="d-flex justify-content-center align-items-center h-100">
-        <h1 class="text-center">Это дневник, прочитанных книг.</h1>
+{% if user.is_authenticated %}
+<div class="container py-4">
+    <div class="d-flex align-items-center justify-content-between mb-4 gap-3">
+        <h1 class="h3 mb-0">Мой дневник</h1>
+        <span class="badge bg-secondary diary-total">Книг в дневнике: {{ diary_total }}</span>
     </div>
+
+    {% if not diary_total %}
+    <div class="alert alert-info diary-empty" role="alert">
+        Дневник пока пуст. Выберите книгу в <a href="{% url 'books' %}" class="alert-link">каталоге</a>
+        и отметьте, что хотите её прочитать.
+    </div>
+    {% endif %}
+
+    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-4 g-4">
+        {% for column in columns %}
+        <div class="col">
+            <section class="card shadow-sm h-100 diary-column" data-status="{{ column.status }}">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h2 class="h6 mb-0">{{ column.title }}</h2>
+                    <span class="badge bg-primary rounded-pill diary-count">{{ column.count }}</span>
+                </div>
+
+                <div class="card-body p-0">
+                    {% for item in column.books %}
+                    <article class="diary-book p-3">
+                        <h3 class="h6 mb-1">
+                            <a href="{{ item.book.get_absolute_url }}">{{ item.book.title }}</a>
+                        </h3>
+                        <p class="text-muted small mb-1">{{ item.book.author.name }}</p>
+                        {% include 'bookshelf_app/include/entry_dates.html' with entry=item.entry %}
+
+                        {% if item.history %}
+                        <details class="diary-history small mt-2">
+                            <summary class="text-muted">История прочтений ({{ item.readings_count }})</summary>
+                            <ul class="list-unstyled mb-0 mt-1 ps-2 border-start">
+                                {% for past in item.history %}
+                                <li>
+                                    {{ past.get_status_display }}
+                                    {% include 'bookshelf_app/include/entry_dates.html' with entry=past inline=True %}
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </details>
+                        {% endif %}
+                    </article>
+                    {% empty %}
+                    <p class="text-muted fst-italic small p-3 mb-0">Здесь пока пусто.</p>
+                    {% endfor %}
+                </div>
+            </section>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% else %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 text-center">
+            <h1 class="display-6 mb-3">Дневник читателя</h1>
+            <p class="lead mb-4">
+                Отмечайте, что читаете сейчас, что хотите прочитать и что уже прочитано.
+                Возвращайтесь к книгам снова — дневник помнит каждое прочтение.
+            </p>
+            <div class="d-flex gap-2 justify-content-center guest-actions">
+                <a href="{% url 'register' %}" class="btn btn-primary btn-lg px-4">Зарегистрироваться</a>
+                <a href="{% url 'login' %}" class="btn btn-outline-secondary btn-lg px-4">Войти</a>
+            </div>
+            <p class="text-muted small mt-4 mb-0">
+                Или просто загляните в <a href="{% url 'books' %}">каталог книг</a>.
+            </p>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

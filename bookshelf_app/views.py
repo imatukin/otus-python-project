@@ -14,6 +14,7 @@ from django.views.generic import (
     UpdateView,
 )
 
+from bookshelf_app.diary import build_diary
 from bookshelf_app.forms import BookForm
 from bookshelf_app.models import Book
 from .tasks import log_new_book_task
@@ -35,9 +36,19 @@ class Breadcrumbs:
 
 
 class IndexView(TemplateView):
-    """Главная страница."""
+    """Главная страница: гостю — приветствие, читателю — его дневник по колонкам статусов."""
 
     template_name = "bookshelf_app/index.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        if self.request.user.is_authenticated:
+            columns = build_diary(self.request.user)
+            context.update(
+                columns=columns,
+                diary_total=sum(column.count for column in columns),
+            )
+        return context
 
 
 class AboutView(Breadcrumbs, TemplateView):

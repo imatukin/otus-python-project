@@ -33,7 +33,9 @@
                     <div class="d-flex justify-content-between align-items-start gap-2">
                         <a href="{{ review.book.get_absolute_url }}">{{ review.book.title }}</a>
                         <span class="rating text-warning flex-shrink-0" title="Оценка: {{ review.rating }} из 5">
-                            {% for _ in "12345" %}{% if forloop.counter <= review.rating %}★{% else %}☆{% endif %}{% endfor %}
+                            {% for _ in "12345" %}
+                                {% if forloop.counter <= review.rating %}★{% else %}☆{% endif %}
+                            {% endfor %}
                         </span>
                     </div>
                     <p class="small text-muted mb-0">{{ review.text|truncatewords:25 }}</p>

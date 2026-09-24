@@ -3,22 +3,40 @@
 import pytest
 from django.urls import reverse
 
-from bookshelf_app.models import Book
+from bookshelf_app.models import Book, ReadingStatus
 
-
-# Это дневник, прочитанных книг.
 
 class TestIndexView:
     """Главная страница."""
 
+    @pytest.mark.django_db
     def test_status_and_template(self, client):
         response = client.get(reverse("index"))
         assert response.status_code == 200
         assert "bookshelf_app/index.html" in [t.name for t in response.templates]
 
-    def test_greeting_in_content(self, client):
+    @pytest.mark.django_db
+    def test_guest_has_no_diary(self, client):
         response = client.get(reverse("index"))
-        assert "Это дневник, прочитанных книг." in response.content.decode()
+        assert "columns" not in response.context
+        assert "diary_total" not in response.context
+
+    @pytest.mark.django_db
+    def test_reader_columns(self, auth_client, entries):
+        response = auth_client.get(reverse("index"))
+        columns = response.context["columns"]
+        assert [column.status for column in columns] == [
+            ReadingStatus.READING,
+            ReadingStatus.PLANNED,
+            ReadingStatus.READ,
+            ReadingStatus.ABANDONED,
+        ]
+        assert response.context["diary_total"] == len(entries)
+
+    @pytest.mark.django_db
+    def test_only_own_entries(self, auth_client_2, entries):  # pylint: disable=unused-argument
+        response = auth_client_2.get(reverse("index"))
+        assert response.context["diary_total"] == 0
 
 
 class TestAboutView:
