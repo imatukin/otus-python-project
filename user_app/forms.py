@@ -83,9 +83,13 @@ class CustomUserCreationForm(UserCreationForm):
         return " ".join(username.split()) or None
 
     def clean_email(self):
-        """Email храним в нижнем регистре и следим за уникальностью."""
+        """Email храним в нижнем регистре и следим за уникальностью.
+
+        Проверяем по всем пользователям, включая удалённых: их адрес остаётся занятым,
+        а сообщение то же самое — не выдаём, что учётная запись была удалена.
+        """
         email = self.cleaned_data["email"].strip().lower()
-        if User.objects.filter(email__iexact=email).exists():
+        if User.all_objects.filter(email__iexact=email).exists():
             raise forms.ValidationError(
                 "Читатель с адресом «%(email)s» уже зарегистрирован.",
                 params={"email": email},

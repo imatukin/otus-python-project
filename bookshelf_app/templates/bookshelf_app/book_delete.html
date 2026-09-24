@@ -12,7 +12,7 @@
             <div class="card shadow-sm border-danger">
                 <div class="card-header bg-white py-3">
                     <h1 class="h4 mb-0 text-danger">Удалить книгу?</h1>
-                    <p class="text-muted small mb-0">Действие необратимо — книга исчезнет из общего каталога.</p>
+                    <p class="text-muted small mb-0">Книга исчезнет из общего каталога. Вернуть её сможет только администратор.</p>
                 </div>
 
                 <div class="card-body">
@@ -37,16 +37,22 @@
 
                     <p class="small text-muted mb-0">
                         Добавил:
-                        <a href="{{ book.added_by.get_absolute_url }}">{{ book.added_by.display_name }}</a>
+                        {% include 'bookshelf_app/include/added_by.html' %}
                     </p>
 
-                    {% with reviews_count=book.reviews.count %}
-                    {% if reviews_count %}
+                    {% if reviews_count or entries_count %}
                     <div class="alert alert-warning mt-3 mb-0" role="alert">
-                        Вместе с книгой будут удалены отзывы читателей — {{ reviews_count }} шт.
+                        Вместе с книгой будут удалены:
+                        <ul class="mb-0">
+                            {% if entries_count %}
+                            <li class="entries-count">записи в дневниках читателей — {{ entries_count }} шт.</li>
+                            {% endif %}
+                            {% if reviews_count %}
+                            <li class="reviews-count">отзывы читателей — {{ reviews_count }} шт.</li>
+                            {% endif %}
+                        </ul>
                     </div>
                     {% endif %}
-                    {% endwith %}
                 </div>
 
                 <div class="card-footer bg-white">

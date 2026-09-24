@@ -7,12 +7,18 @@ from django.db import models
 from django.urls import reverse
 from django.utils import timezone
 
+from .soft_delete import SoftDeleteModel
+
 MIN_RATING = 1
 MAX_RATING = 5
 
 
-class Author(models.Model):
+class Author(SoftDeleteModel):
     """Автор книги."""
+
+    # Пока у автора есть неудалённые книги, удалить его нельзя — как PROTECT у Book.author.
+    soft_delete_protect = ('books',)
+
     name = models.CharField('ФИО', max_length=200)
     bio = models.TextField('Биография', blank=True)
     birth_date = models.DateField('Дата рождения', blank=True, null=True)
@@ -35,8 +41,12 @@ class Genre(models.Model):
         return self.name
 
 
-class Book(models.Model):
+class Book(SoftDeleteModel):
     """Книга из общего каталога."""
+
+    # Удалённая книга уносит с собой отзывы и записи дневника всех читателей.
+    soft_delete_cascade = ('reviews', 'entries')
+
     title = models.CharField('Название', max_length=200)
     description = models.TextField('Описание', blank=True)
     author = models.ForeignKey(
@@ -58,7 +68,9 @@ class Book(models.Model):
     added_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         verbose_name='Кто добавил',
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
         related_name='added_books',
     )
 
@@ -72,8 +84,14 @@ class Book(models.Model):
         """Ссылка на страницу книги — сюда возвращаемся после создания/редактирования."""
         return reverse('book_detail', args=[self.pk])
 
+    def can_be_deleted_by(self, user):
+        """Удалить книгу вправе добавивший её читатель или администратор."""
+        if not user.is_authenticated:
+            return False
+        return user.is_staff or (self.added_by_id is not None and self.added_by_id == user.pk)
 
-class Review(models.Model):
+
+class Review(SoftDeleteModel):
     """Отзыв читателя о книге."""
     book = models.ForeignKey(
         Book,
@@ -109,7 +127,7 @@ class ReadingStatus(models.TextChoices):
     ABANDONED = 'abandoned', 'Брошено'
 
 
-class ReadingEntry(models.Model):
+class ReadingEntry(SoftDeleteModel):
     """Запись дневника — одно прочтение книги одним читателем.
 
     Ограничения уникальности нет намеренно: книгу можно перечитывать,

@@ -79,9 +79,13 @@ class UserLogoutView(LogoutView):
 
 
 class UserDetailView(Breadcrumbs, DetailView):
-    """Публичная страница читателя: его книги и отзывы."""
+    """Публичная страница читателя: его книги и отзывы.
 
-    model = User
+    Страница удалённого читателя остаётся доступной: его книги и отзывы видны
+    на сайте, и ссылки на автора с них не должны вести в пустоту.
+    """
+
+    queryset = User.all_objects.all()
     template_name = "user_app/user_detail.html"
     context_object_name = "reader"
 

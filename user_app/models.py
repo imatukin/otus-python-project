@@ -4,9 +4,16 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.urls import reverse
 
+from bookshelf_app.soft_delete import SoftDeleteManager, SoftDeleteModel
 
-class CustomUserManager(BaseUserManager):
-    """Менеджер пользователей: вместо логина — email."""
+
+class CustomUserManager(SoftDeleteManager, BaseUserManager):
+    """Менеджер пользователей: вместо логина — email, удалённых не видно.
+
+    Это менеджер по умолчанию, через него `ModelBackend` ищет пользователя и при входе,
+    и при загрузке сессии. Поэтому мягко удалённый пользователь не может войти,
+    а уже открытые сессии у него перестают действовать.
+    """
 
     def create_user(self, email, password=None, **extra_fields):
         """Создаёт обычного пользователя по email и паролю."""
@@ -34,8 +41,12 @@ class CustomUserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 
-class CustomUser(AbstractUser):
-    """Пользователь сайта, он же читатель."""
+class CustomUser(SoftDeleteModel, AbstractUser):
+    """Пользователь сайта, он же читатель.
+
+    Удаление мягкое и без каскада: книги, записи дневника и отзывы читателя остаются
+    на сайте. Email удалённого остаётся занятым — зарегистрироваться на него снова нельзя.
+    """
     username = models.CharField(
         max_length=150,
         unique=False,
@@ -72,6 +83,11 @@ class CustomUser(AbstractUser):
     REQUIRED_FIELDS = []
 
     objects = CustomUserManager()
+
+    # Без явного Meta Django взял бы его у первого родителя (SoftDeleteModel)
+    # и потерял бы настройки AbstractUser.
+    class Meta(AbstractUser.Meta):
+        pass
 
     @property
     def display_name(self):

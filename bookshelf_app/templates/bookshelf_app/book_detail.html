@@ -24,9 +24,11 @@
                     <a href="{% url 'book_edit' book.id %}" class="btn btn-outline-primary btn-sm">
                         Редактировать
                     </a>
+                    {% if can_delete %}
                     <a href="{% url 'book_delete' book.id %}" class="btn btn-outline-danger btn-sm">
                         Удалить
                     </a>
+                    {% endif %}
                 </div>
                 {% endif %}
             </div>
@@ -57,7 +59,7 @@
 
         <div class="card-footer bg-white border-top-0 small text-muted">
             Добавил:
-            <a href="{{ book.added_by.get_absolute_url }}">{{ book.added_by.display_name }}</a>
+            {% include 'bookshelf_app/include/added_by.html' %}
         </div>
     </div>
 

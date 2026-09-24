@@ -4,7 +4,7 @@ import datetime
 
 import pytest
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError
+from django.db import IntegrityError, models
 from django.urls import reverse
 from django.utils import timezone
 
@@ -92,10 +92,18 @@ class TestBook:
         assert book.is_pending is True
 
     @pytest.mark.django_db
-    def test_deleted_with_user(self, book, user_1):
-        """Книги удаляются вместе с пользователем (CASCADE)."""
+    def test_kept_when_user_deleted(self, book, user_1):
+        """Удалённый пользователь не уносит свои книги."""
         user_1.delete()
-        assert not Book.objects.filter(pk=book.pk).exists()
+        book.refresh_from_db()
+        assert Book.objects.filter(pk=book.pk).exists()
+        assert book.added_by == user_1
+
+    def test_added_by_set_null(self):
+        """Если пользователя всё же сотрут из базы, книга останется без автора добавления."""
+        field = Book._meta.get_field("added_by")
+        assert field.null is True
+        assert field.remote_field.on_delete is models.SET_NULL
 
 
 class TestReview:
@@ -135,6 +143,7 @@ class TestReview:
     def test_deleted_with_book(self, review, book):
         book.delete()
         assert not Review.objects.filter(pk=review.pk).exists()
+        assert Review.all_objects.get(pk=review.pk).is_deleted is True
 
 
 
@@ -181,6 +190,7 @@ class TestReadingEntry:
     def test_deleted_with_book(self, entry, book):
         book.delete()
         assert not ReadingEntry.objects.filter(pk=entry.pk).exists()
+        assert ReadingEntry.all_objects.get(pk=entry.pk).is_deleted is True
 
     @pytest.mark.django_db
     def test_finished_before_started_is_invalid(self, book, user_1):

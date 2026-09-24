@@ -72,9 +72,7 @@
 
                 <div class="card-footer bg-white border-top-0 small text-muted">
                     Добавил:
-                    <a href="{{ book.added_by.get_absolute_url }}" class="position-relative">
-                        {{ book.added_by.display_name }}
-                    </a>
+                    {% include 'bookshelf_app/include/added_by.html' with link_class='position-relative' %}
                 </div>
             </div>
         </div>

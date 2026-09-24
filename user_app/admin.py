@@ -3,11 +3,12 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
+from bookshelf_app.admin import SoftDeleteAdmin
 from user_app.models import CustomUser
 
 
 @admin.register(CustomUser)
-class CustomUserAdmin(UserAdmin):
+class CustomUserAdmin(SoftDeleteAdmin, UserAdmin):
     """Пользователи в админке."""
 
     list_display = ("email", "username", "full_name", "date_of_birth", "is_staff")

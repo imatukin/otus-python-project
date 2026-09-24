@@ -4,7 +4,7 @@ import pytest
 from bs4 import BeautifulSoup
 from django.urls import reverse
 
-from bookshelf_app.models import Review
+from bookshelf_app.models import ReadingEntry, Review
 
 # Все шаблоны рендерятся через клиент и почти везде опираются на данные из базы.
 pytestmark = pytest.mark.django_db
@@ -279,6 +279,24 @@ class TestBooksTemplate:
         assert text_of(link) == user_1.display_name
         assert link["href"] == user_1.get_absolute_url()
 
+    def test_card_footer_link_keeps_class(self, client, book):  # pylint: disable=unused-argument
+        """Ссылка на читателя должна быть кликабельна поверх stretched-link карточки."""
+        card = self.get_cards(client.get(reverse("books")))[0]
+        assert "position-relative" in card.select_one(".card-footer a")["class"]
+
+    def test_card_footer_without_reader(self, client, book):
+        book.added_by = None
+        book.save()
+        card = self.get_cards(client.get(reverse("books")))[0]
+        assert card.select_one(".card-footer a") is None
+        assert "неизвестно" in text_of(card.select_one(".card-footer"))
+
+    def test_deleted_book_hidden(self, client, books):
+        books[0].delete()
+        cards = self.get_cards(client.get(reverse("books")))
+        assert len(cards) == len(books) - 1
+        assert books[0].title not in [text_of(card.select_one(".card-title")) for card in cards]
+
     def test_empty_catalog(self, client):
         response = client.get(reverse("books"))
         assert not self.get_cards(response)
@@ -347,6 +365,30 @@ class TestBookDetailTemplate:
         delete = soup.select_one(f'a[href="{reverse("book_delete", args=[book.pk])}"]')
         assert text_of(edit) == "Редактировать"
         assert text_of(delete) == "Удалить"
+
+    def test_delete_button_hidden_for_other_reader(self, auth_client_2, book):
+        """Править книгу может любой, удалить — только добавивший или админ."""
+        soup = get_soup(auth_client_2.get(book.get_absolute_url()))
+        assert soup.select_one(f'a[href="{reverse("book_edit", args=[book.pk])}"]') is not None
+        assert soup.select_one(f'a[href="{reverse("book_delete", args=[book.pk])}"]') is None
+
+    def test_delete_button_shown_for_admin(self, admin_auth_client, book):
+        soup = get_soup(admin_auth_client.get(book.get_absolute_url()))
+        assert soup.select_one(f'a[href="{reverse("book_delete", args=[book.pk])}"]') is not None
+
+    def test_added_by_unknown(self, client, book):
+        book.added_by = None
+        book.save()
+        soup = get_soup(client.get(book.get_absolute_url()))
+        footer = soup.select_one(".card-footer")
+        assert footer.select_one("a") is None
+        assert "неизвестно" in text_of(footer)
+
+    def test_added_by_deleted_user_still_shown(self, client, book, user_1):
+        user_1.delete()
+        soup = get_soup(client.get(book.get_absolute_url()))
+        link = soup.select_one(".card-footer a")
+        assert link["href"] == user_1.get_absolute_url()
 
     def test_reviews_counter(self, client, book, reviews):
         soup = get_soup(client.get(book.get_absolute_url()))
@@ -494,7 +536,7 @@ class TestBookDeleteTemplate:
     def test_headers(self, auth_client, book):
         soup = get_soup(auth_client.get(reverse("book_delete", args=[book.pk])))
         assert text_of(soup.select_one(".card-header h1")) == "Удалить книгу?"
-        assert "Действие необратимо" in text_of(soup.select_one(".card-header p"))
+        assert "Вернуть её сможет только администратор" in text_of(soup.select_one(".card-header p"))
 
     def test_book_info(self, auth_client, book):
         soup = get_soup(auth_client.get(reverse("book_delete", args=[book.pk])))
@@ -520,7 +562,22 @@ class TestBookDeleteTemplate:
         soup = get_soup(auth_client.get(reverse("book_delete", args=[book.pk])))
         warning = soup.select_one(".alert-warning")
         assert warning is not None
-        assert f"{len(reviews)} шт." in text_of(warning)
+        assert f"{len(reviews)} шт." in text_of(warning.select_one(".reviews-count"))
+        assert warning.select_one(".entries-count") is None
+
+    def test_entries_warning(self, auth_client, book, entry, user_2):  # pylint: disable=unused-argument
+        """Считаются записи дневника всех читателей, а не только свои."""
+        ReadingEntry.objects.create(reader=user_2, book=book)
+        soup = get_soup(auth_client.get(reverse("book_delete", args=[book.pk])))
+        warning = soup.select_one(".alert-warning")
+        assert "2 шт." in text_of(warning.select_one(".entries-count"))
+        assert warning.select_one(".reviews-count") is None
+
+    def test_deleted_not_counted(self, auth_client, book, reviews):
+        """Уже удалённые отзывы в предупреждение не попадают."""
+        reviews[0].delete()
+        soup = get_soup(auth_client.get(reverse("book_delete", args=[book.pk])))
+        assert f"{len(reviews) - 1} шт." in text_of(soup.select_one(".reviews-count"))
 
     def test_no_warning_without_reviews(self, auth_client, book):
         soup = get_soup(auth_client.get(reverse("book_delete", args=[book.pk])))

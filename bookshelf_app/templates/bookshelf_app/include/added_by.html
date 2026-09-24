@@ -1,0 +1,2 @@
+{# Кто добавил книгу: ссылка на читателя или прочерк, если его нет. Ждёт переменную book. #}
+{% if book.added_by %}<a href="{{ book.added_by.get_absolute_url }}"{% if link_class %} class="{{ link_class }}"{% endif %}>{{ book.added_by.display_name }}</a>{% else %}<span class="fst-italic">неизвестно</span>{% endif %}

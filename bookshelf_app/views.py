@@ -1,7 +1,9 @@
 """Представления каталога: список книг, страница книги и её редактирование."""
 
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.messages.views import SuccessMessageMixin
+from django.http import HttpResponseRedirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import (
     CreateView,
@@ -98,6 +100,7 @@ class BookDetailView(BookObjectBase, DetailView):
             self.object.reviews.select_related("reader").order_by("-created_at")
         )
         context["page_title"] = self.object.title
+        context["can_delete"] = self.object.can_be_deleted_by(self.request.user)
         return context
 
 
@@ -157,12 +160,18 @@ class BookUpdateView(LoginRequiredMixin, BookObjectBase, SuccessMessageMixin, Up
         return context
 
 
-class BookDeleteView(LoginRequiredMixin, BookObjectBase, SuccessMessageMixin, DeleteView):
-    """Удаление книги."""
+class BookDeleteView(LoginRequiredMixin, UserPassesTestMixin, BookObjectBase, DeleteView):
+    """Удаление книги — мягкое: книга, её отзывы и записи дневника помечаются удалёнными.
+
+    Удалить книгу может только добавивший её читатель или администратор.
+    """
 
     template_name = "bookshelf_app/book_delete.html"
     context_object_name = "book"
     success_url = reverse_lazy("books")
+
+    def test_func(self):
+        return self.get_object().can_be_deleted_by(self.request.user)
 
     def get_breadcrumbs(self):
         return super().get_breadcrumbs() + [{"title": "Удаление"}]
@@ -170,7 +179,12 @@ class BookDeleteView(LoginRequiredMixin, BookObjectBase, SuccessMessageMixin, De
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["page_title"] = f"Удаление: {self.object.title}"
+        context["reviews_count"] = self.object.reviews.count()
+        context["entries_count"] = self.object.entries.count()
         return context
 
-    def get_success_message(self, cleaned_data):
-        return f"Книга «{self.object.title}» удалена из каталога."
+    def form_valid(self, form):
+        """Помечаем книгу удалённой от имени того, кто нажал кнопку."""
+        self.object.delete(user=self.request.user)
+        messages.success(self.request, f"Книга «{self.object.title}» удалена из каталога.")
+        return HttpResponseRedirect(self.get_success_url())

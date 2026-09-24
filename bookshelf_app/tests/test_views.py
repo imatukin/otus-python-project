@@ -89,6 +89,26 @@ class TestBookDetailView:
         titles = [crumb["title"] for crumb in response.context["breadcrumbs"]]
         assert titles == ["Главная", "Все книги", book.title]
 
+    @pytest.mark.django_db
+    def test_deleted_book_returns_404(self, client, book):
+        book.delete()
+        assert client.get(book.get_absolute_url()).status_code == 404
+
+    @pytest.mark.django_db
+    def test_deleted_reviews_hidden(self, client, book, reviews):
+        reviews[0].delete()
+        response = client.get(book.get_absolute_url())
+        assert list(response.context["reviews"]) == [reviews[1]]
+
+    @pytest.mark.parametrize(
+        ("client_fixture", "expected"),
+        [("client", False), ("auth_client", True), ("auth_client_2", False), ("admin_auth_client", True)],
+    )
+    @pytest.mark.django_db
+    def test_can_delete(self, request, book, client_fixture, expected):
+        client = request.getfixturevalue(client_fixture)
+        assert client.get(book.get_absolute_url()).context["can_delete"] is expected
+
 
 class TestBookCreateView:
     """Добавление книги."""
@@ -203,11 +223,47 @@ class TestBookDeleteView:
         assert response.context["page_title"] == f"Удаление: {book.title}"
 
     @pytest.mark.django_db
-    def test_book_deleted(self, auth_client, book):
+    def test_confirmation_counts(self, auth_client, book, review, entry):  # pylint: disable=unused-argument
+        response = auth_client.get(reverse("book_delete", args=[book.pk]))
+        assert response.context["reviews_count"] == 1
+        assert response.context["entries_count"] == 1
+
+    @pytest.mark.django_db
+    def test_book_soft_deleted(self, auth_client, book, user_1):
         response = auth_client.post(reverse("book_delete", args=[book.pk]))
         assert response.status_code == 302
         assert response.url == reverse("books")
         assert not Book.objects.filter(pk=book.pk).exists()
+
+        book = Book.all_objects.get(pk=book.pk)
+        assert book.is_deleted is True
+        assert book.deleted_by == user_1
+        assert book.deleted_at is not None
+
+    @pytest.mark.django_db
+    def test_cascade_to_reviews_and_entries(self, auth_client, book, review, entry):
+        auth_client.post(reverse("book_delete", args=[book.pk]))
+        for obj in (review, entry):
+            obj.refresh_from_db()
+            assert obj.is_deleted is True
+
+    @pytest.mark.parametrize("method", ["get", "post"])
+    @pytest.mark.django_db
+    def test_other_reader_forbidden(self, auth_client_2, book, method):
+        response = getattr(auth_client_2, method)(reverse("book_delete", args=[book.pk]))
+        assert response.status_code == 403
+        assert Book.objects.filter(pk=book.pk).exists()
+
+    @pytest.mark.django_db
+    def test_admin_can_delete(self, admin_auth_client, book, superuser):
+        response = admin_auth_client.post(reverse("book_delete", args=[book.pk]))
+        assert response.status_code == 302
+        assert Book.all_objects.get(pk=book.pk).deleted_by == superuser
+
+    @pytest.mark.django_db
+    def test_deleted_book_not_found(self, auth_client, book):
+        book.delete()
+        assert auth_client.get(reverse("book_delete", args=[book.pk])).status_code == 404
 
     @pytest.mark.django_db
     def test_success_message(self, auth_client, book):
