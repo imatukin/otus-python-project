@@ -85,6 +85,9 @@
                         {% endfor %}
 
                         <div class="d-flex gap-2 justify-content-end border-top pt-3">
+                            {% if delete_url %}
+                            <a href="{{ delete_url }}" class="btn btn-outline-danger me-auto">Удалить</a>
+                            {% endif %}
                             <a href="{{ cancel_url }}" class="btn btn-outline-secondary">Отмена</a>
                             <button type="submit" class="btn btn-primary px-4">{{ submit_label }}</button>
                         </div>

@@ -220,6 +220,31 @@ class TestUserDetailView:
         assert response.context["is_own_profile"] is False
 
 
+class TestReaderDiaryContext:
+    """Дневник на странице читателя и в профиле."""
+
+    @pytest.mark.django_db
+    def test_reader_page(self, client, user_1, entry):
+        context = client.get(user_1.get_absolute_url()).context
+        assert context["diary_total"] == 1
+        [column] = [column for column in context["columns"] if column.count]
+        assert column.books[0].entry == entry
+
+    @pytest.mark.django_db
+    def test_reader_page_shows_owner_diary(self, auth_client_2, user_1, user_2, entry):  # pylint: disable=unused-argument
+        assert auth_client_2.get(user_1.get_absolute_url()).context["diary_total"] == 1
+        assert auth_client_2.get(user_2.get_absolute_url()).context["diary_total"] == 0
+
+    @pytest.mark.django_db
+    def test_deleted_reader_diary_still_shown(self, client, user_1, entry):  # pylint: disable=unused-argument
+        user_1.delete()
+        assert client.get(user_1.get_absolute_url()).context["diary_total"] == 1
+
+    @pytest.mark.django_db
+    def test_profile(self, auth_client, entry):  # pylint: disable=unused-argument
+        assert auth_client.get(reverse("profile")).context["diary_total"] == 1
+
+
 class TestProfileView:
     """Свой профиль — просмотр и редактирование."""
 

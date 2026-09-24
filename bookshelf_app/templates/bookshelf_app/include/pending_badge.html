@@ -1,0 +1,4 @@
+{# Бейдж книги-черновика из быстрого добавления. Ждёт book. #}
+{% if book.is_pending %}
+<span class="badge bg-warning text-dark pending-badge" title="Заполнены только название и автор">черновик</span>
+{% endif %}

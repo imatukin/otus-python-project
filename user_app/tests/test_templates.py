@@ -20,7 +20,7 @@ def text_of(tag):
 
 def activity_cards(soup):
     """Две карточки блока активности: книги и отзывы."""
-    return soup.select(".row.g-4 .card")
+    return soup.select(".reader-activity .card")
 
 
 class TestUserFormTemplate:
@@ -292,6 +292,36 @@ class TestReaderActivityTemplate:
         soup = get_soup(auth_client.get(reverse("profile")))
         item = activity_cards(soup)[0].select_one(".list-group-item")
         assert text_of(item.a) == book.title
+
+
+class TestReaderDiaryTemplate:
+    """Дневник на странице читателя: чужой — только просмотр, свой — с кнопками."""
+
+    def test_columns_on_reader_page(self, client, user_1, entry):  # pylint: disable=unused-argument
+        soup = get_soup(client.get(user_1.get_absolute_url()))
+        diary = soup.select_one(".reader-diary")
+        assert text_of(diary.h2) == "Дневник"
+        assert text_of(diary.select_one(".diary-total")) == "Книг в дневнике: 1"
+        assert len(diary.select(".diary-column")) == 4
+        assert text_of(diary.select_one('.diary-column[data-status="reading"] h3')) == entry.book.title
+
+    @pytest.mark.parametrize("client_fixture", ["client", "auth_client_2"])
+    def test_read_only_for_others(self, request, client_fixture, user_1, entry):  # pylint: disable=unused-argument
+        client = request.getfixturevalue(client_fixture)
+        diary = get_soup(client.get(user_1.get_absolute_url())).select_one(".reader-diary")
+        assert diary.select_one(".diary-book") is not None
+        assert not diary.select(".status-buttons")
+        assert not diary.select(".entry-edit")
+
+    def test_editable_for_owner(self, auth_client, user_1, entry):
+        diary = get_soup(auth_client.get(user_1.get_absolute_url())).select_one(".reader-diary")
+        assert diary.select(".status-buttons button")
+        assert diary.select_one(".entry-edit")["href"] == reverse("entry_edit", args=[entry.pk])
+
+    def test_editable_in_profile(self, auth_client, entry):  # pylint: disable=unused-argument
+        diary = get_soup(auth_client.get(reverse("profile"))).select_one(".reader-diary")
+        assert diary.select(".status-buttons button")
+        assert diary.select_one('.status-buttons input[name="next"]')["value"] == reverse("profile")
 
 
 class TestProfileTemplate:

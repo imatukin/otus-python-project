@@ -1,0 +1,111 @@
+{% extends 'bookshelf_app/base.html' %}
+
+{% block title %} {{ page_title }} {% endblock %}
+
+{% block extra_css %}
+<style>
+    .field-invalid .form-control,
+    .field-invalid .form-select {
+        border-color: #dc3545;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+
+            {% include 'bookshelf_app/include/breadcrumb.html' %}
+
+            <h1 class="h4 mb-3">{{ page_title }}</h1>
+
+            <form method="get" class="mb-4 diary-search" role="search">
+                <div class="input-group">
+                    <input
+                        type="search"
+                        name="q"
+                        value="{{ query }}"
+                        class="form-control"
+                        placeholder="Название книги"
+                        aria-label="Название книги"
+                        required
+                    />
+                    <button type="submit" class="btn btn-primary">Найти</button>
+                </div>
+            </form>
+
+            {% if query or form.is_bound %}
+            {% if results %}
+            <section class="card shadow-sm mb-4 search-results">
+                <div class="card-header bg-white">
+                    <h2 class="h6 mb-0">Нашлось в каталоге</h2>
+                </div>
+                {# Книгу из поиска добавили — возвращаемся в дневник, а не к поиску. #}
+                {% url 'index' as diary_url %}
+                <ul class="list-group list-group-flush">
+                    {% for book in results %}
+                    <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2 search-result">
+                        <div>
+                            <a href="{{ book.get_absolute_url }}">{{ book.title }}</a>
+                            {% include 'bookshelf_app/include/pending_badge.html' %}
+                            <span class="text-muted small d-block">{{ book.author.name }}</span>
+                        </div>
+                        {% include 'bookshelf_app/include/status_buttons.html' with actions=book.status_actions next=diary_url %}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </section>
+            {% endif %}
+
+            <section class="card shadow-sm quick-add">
+                <div class="card-header bg-white py-3">
+                    {% if results %}
+                    <h2 class="h5 mb-0">Нужной книги нет в списке? Добавьте её</h2>
+                    {% else %}
+                    <h2 class="h5 mb-0">Такой книги нет в базе, добавить?</h2>
+                    {% endif %}
+                    <p class="text-muted small mb-0">
+                        Книга попадёт в каталог черновиком — жанры, год и описание можно дописать позже.
+                    </p>
+                </div>
+
+                <div class="card-body">
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+
+                        {% for field in form %}
+                        <div class="mb-3{% if field.errors %} field-invalid{% endif %}">
+                            <label class="form-label fw-semibold" for="{{ field.id_for_label }}">
+                                {{ field.label }}{% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+                            </label>
+
+                            {{ field }}
+
+                            {% if field.help_text %}
+                            <div class="form-text">{{ field.help_text }}</div>
+                            {% endif %}
+
+                            {% for error in field.errors %}
+                            <div class="small text-danger mt-1">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endfor %}
+
+                        <div class="d-flex gap-2 justify-content-end border-top pt-3">
+                            <a href="{% url 'index' %}" class="btn btn-outline-secondary">Отмена</a>
+                            <button type="submit" class="btn btn-primary px-4">Добавить книгу</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+            {% else %}
+            <p class="text-muted search-hint">
+                Введите название — поищем книгу в каталоге. Если её там нет, добавите её сами.
+            </p>
+            {% endif %}
+
+        </div>
+    </div>
+</div>
+{% endblock %}

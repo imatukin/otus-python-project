@@ -2,18 +2,6 @@
 
 {% block title %}Главная{% endblock %}
 
-{% block extra_css %}
-<style>
-    .diary-book + .diary-book {
-        border-top: 1px solid rgba(0, 0, 0, .125);
-    }
-
-    .diary-history summary {
-        cursor: pointer;
-    }
-</style>
-{% endblock %}
-
 {% block content %}
 {% if user.is_authenticated %}
 <div class="container py-4">
@@ -29,46 +17,22 @@
     </div>
     {% endif %}
 
-    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-4 g-4">
-        {% for column in columns %}
-        <div class="col">
-            <section class="card shadow-sm h-100 diary-column" data-status="{{ column.status }}">
-                <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                    <h2 class="h6 mb-0">{{ column.title }}</h2>
-                    <span class="badge bg-primary rounded-pill diary-count">{{ column.count }}</span>
-                </div>
-
-                <div class="card-body p-0">
-                    {% for item in column.books %}
-                    <article class="diary-book p-3">
-                        <h3 class="h6 mb-1">
-                            <a href="{{ item.book.get_absolute_url }}">{{ item.book.title }}</a>
-                        </h3>
-                        <p class="text-muted small mb-1">{{ item.book.author.name }}</p>
-                        {% include 'bookshelf_app/include/entry_dates.html' with entry=item.entry %}
-
-                        {% if item.history %}
-                        <details class="diary-history small mt-2">
-                            <summary class="text-muted">История прочтений ({{ item.readings_count }})</summary>
-                            <ul class="list-unstyled mb-0 mt-1 ps-2 border-start">
-                                {% for past in item.history %}
-                                <li>
-                                    {{ past.get_status_display }}
-                                    {% include 'bookshelf_app/include/entry_dates.html' with entry=past inline=True %}
-                                </li>
-                                {% endfor %}
-                            </ul>
-                        </details>
-                        {% endif %}
-                    </article>
-                    {% empty %}
-                    <p class="text-muted fst-italic small p-3 mb-0">Здесь пока пусто.</p>
-                    {% endfor %}
-                </div>
-            </section>
+    <form method="get" action="{% url 'diary_add' %}" class="mb-4 diary-search" role="search">
+        <label class="form-label fw-semibold" for="diary-search-q">Добавить книгу в дневник</label>
+        <div class="input-group">
+            <input
+                type="search"
+                name="q"
+                id="diary-search-q"
+                class="form-control"
+                placeholder="Название книги"
+                required
+            />
+            <button type="submit" class="btn btn-primary">Найти</button>
         </div>
-        {% endfor %}
-    </div>
+    </form>
+
+    {% include 'bookshelf_app/include/diary_columns.html' with editable=True %}
 </div>
 {% else %}
 <div class="container py-5">

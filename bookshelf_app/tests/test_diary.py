@@ -4,8 +4,17 @@ import datetime
 
 import pytest
 
-from bookshelf_app.diary import COLUMNS, build_diary
-from bookshelf_app.models import ReadingEntry, ReadingStatus
+from bookshelf_app.diary import (
+    COLUMNS,
+    TRANSITIONS,
+    StatusTransitionError,
+    build_diary,
+    change_status,
+    latest_entry,
+    status_actions,
+    with_diary_status,
+)
+from bookshelf_app.models import Book, ReadingEntry, ReadingStatus
 
 pytestmark = pytest.mark.django_db
 
@@ -105,3 +114,139 @@ class TestBuildDiary:
             columns = build_diary(user_1)
             names = [diary_book.book.author.name for item in columns for diary_book in item.books]
         assert len(names) == len(books)
+
+    def test_actions_of_diary_book(self, user_1, entry):  # pylint: disable=unused-argument
+        [diary_book] = column(build_diary(user_1), ReadingStatus.READING).books
+        assert [action.status for action in diary_book.actions] == [ReadingStatus.READ, ReadingStatus.ABANDONED]
+
+
+def labels(current):
+    """Надписи на кнопках смены статуса."""
+    return [action.label for action in status_actions(current)]
+
+
+class TestStatusActions:
+    """Какие кнопки смены статуса показываем."""
+
+    def test_all_statuses_have_transitions(self):
+        assert set(TRANSITIONS) == {None, *ReadingStatus.values}
+
+    def test_book_not_in_diary(self):
+        assert labels(None) == ["Хочу прочитать", "Читаю", "Прочитано"]
+
+    def test_planned(self):
+        assert labels(ReadingStatus.PLANNED) == ["Читаю", "Прочитано"]
+
+    def test_reading(self):
+        assert labels("reading") == ["Прочитано", "Бросил"]
+
+    @pytest.mark.parametrize("status", [ReadingStatus.READ, ReadingStatus.ABANDONED])
+    def test_finished_offers_rereading(self, status):
+        assert labels(status) == ["Хочу прочитать", "Перечитать"]
+
+    def test_action_status_values(self):
+        assert [action.status for action in status_actions(None)] == [
+            ReadingStatus.PLANNED, ReadingStatus.READING, ReadingStatus.READ,
+        ]
+
+
+class TestLatestEntry:
+    """Последняя запись читателя о книге."""
+
+    def test_no_entries(self, user_1, book):
+        assert latest_entry(user_1, book) is None
+
+    def test_newest_wins(self, user_1, book):
+        ReadingEntry.objects.create(reader=user_1, book=book, status=ReadingStatus.READ)
+        second = ReadingEntry.objects.create(reader=user_1, book=book, status=ReadingStatus.PLANNED)
+        assert latest_entry(user_1, book) == second
+
+    def test_deleted_skipped(self, user_1, book):
+        first = ReadingEntry.objects.create(reader=user_1, book=book, status=ReadingStatus.READ)
+        ReadingEntry.objects.create(reader=user_1, book=book, status=ReadingStatus.PLANNED).delete()
+        assert latest_entry(user_1, book) == first
+
+    def test_other_reader_ignored(self, user_2, entry, book):  # pylint: disable=unused-argument
+        assert latest_entry(user_2, book) is None
+
+
+class TestWithDiaryStatus:
+    """Статус книги в дневнике прямо в выборке каталога."""
+
+    def test_statuses(self, user_1, entries, book, book_of_user_2, books):  # pylint: disable=unused-argument
+        statuses = {item.pk: item.diary_status for item in with_diary_status(Book.objects.all(), user_1)}
+        assert statuses[book.pk] == ReadingStatus.READ
+        assert statuses[book_of_user_2.pk] == ReadingStatus.PLANNED
+        assert statuses[books[0].pk] is None
+
+    def test_latest_entry_status(self, user_1, book):
+        ReadingEntry.objects.create(reader=user_1, book=book, status=ReadingStatus.READ)
+        ReadingEntry.objects.create(reader=user_1, book=book, status=ReadingStatus.READING)
+        assert with_diary_status(Book.objects.all(), user_1).get().diary_status == ReadingStatus.READING
+
+    def test_deleted_entry_ignored(self, user_1, entry):
+        entry.delete()
+        assert with_diary_status(Book.objects.all(), user_1).get().diary_status is None
+
+    def test_other_reader(self, user_2, entry):  # pylint: disable=unused-argument
+        assert with_diary_status(Book.objects.all(), user_2).get().diary_status is None
+
+
+class TestChangeStatus:
+    """Смена статуса книги кнопкой."""
+
+    today = datetime.date(2026, 3, 1)
+
+    def test_creates_entry(self, user_1, book):
+        entry = change_status(user_1, book, ReadingStatus.PLANNED, today=self.today)
+        assert entry.pk is not None
+        assert (entry.reader, entry.book, entry.status) == (user_1, book, ReadingStatus.PLANNED)
+        assert entry.started_at is None
+
+    def test_reading_sets_start(self, user_1, book):
+        entry = change_status(user_1, book, "reading", today=self.today)
+        assert entry.started_at == self.today
+
+    def test_updates_unfinished_entry(self, user_1, entry, book):
+        changed = change_status(user_1, book, ReadingStatus.READ, today=self.today)
+        assert changed.pk == entry.pk
+        assert ReadingEntry.objects.count() == 1
+        changed.refresh_from_db()
+        assert changed.status == ReadingStatus.READ
+        assert changed.started_at == entry.started_at
+        assert changed.finished_at == self.today
+
+    @pytest.mark.parametrize("status", [ReadingStatus.PLANNED, ReadingStatus.READING])
+    def test_finished_starts_new_reading(self, user_1, book, status):
+        old = ReadingEntry.objects.create(reader=user_1, book=book, status=ReadingStatus.READ)
+        new = change_status(user_1, book, status, today=self.today)
+        assert new.pk != old.pk
+        old.refresh_from_db()
+        assert old.status == ReadingStatus.READ
+        [diary_book] = column(build_diary(user_1), status).books
+        assert diary_book.history == [old]
+
+    @pytest.mark.parametrize(
+        ("current", "status"),
+        [
+            (None, ReadingStatus.ABANDONED),
+            (ReadingStatus.PLANNED, ReadingStatus.PLANNED),
+            (ReadingStatus.READING, ReadingStatus.PLANNED),
+            (ReadingStatus.READ, ReadingStatus.ABANDONED),
+            (None, "nonsense"),
+            (None, None),
+        ],
+    )
+    def test_forbidden_transition(self, user_1, book, current, status):
+        if current:
+            ReadingEntry.objects.create(reader=user_1, book=book, status=current)
+        count = ReadingEntry.objects.count()
+        with pytest.raises(StatusTransitionError):
+            change_status(user_1, book, status)
+        assert ReadingEntry.objects.count() == count
+
+    def test_other_readers_entry_untouched(self, user_2, entry, book):
+        change_status(user_2, book, ReadingStatus.PLANNED)
+        entry.refresh_from_db()
+        assert entry.status == ReadingStatus.READING
+        assert ReadingEntry.objects.filter(reader=user_2).count() == 1

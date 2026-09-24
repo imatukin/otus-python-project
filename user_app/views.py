@@ -7,7 +7,7 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DetailView, UpdateView
 
-from bookshelf_app.views import Breadcrumbs
+from bookshelf_app.views import Breadcrumbs, diary_context
 from user_app.forms import (
     CustomAuthenticationForm,
     CustomUserCreationForm,
@@ -79,7 +79,10 @@ class UserLogoutView(LogoutView):
 
 
 class UserDetailView(Breadcrumbs, DetailView):
-    """Публичная страница читателя: его книги и отзывы.
+    """Публичная страница читателя: его дневник, книги и отзывы.
+
+    Дневник на чужой странице — только для просмотра, кнопки смены статуса и правка
+    записей показываются лишь самому читателю.
 
     Страница удалённого читателя остаётся доступной: его книги и отзывы видны
     на сайте, и ссылки на автора с них не должны вести в пустоту.
@@ -101,12 +104,13 @@ class UserDetailView(Breadcrumbs, DetailView):
                 self.object.reviews.select_related("book").order_by("-created_at")
             ),
             is_own_profile=self.object == self.request.user,
+            **diary_context(self.object),
         )
         return context
 
 
 class ProfileView(LoginRequiredMixin, Breadcrumbs, SuccessMessageMixin, UpdateView):
-    """Свой профиль — просмотр и редактирование."""
+    """Свой профиль — просмотр и редактирование, ниже — свой дневник."""
 
     form_class = ProfileForm
     template_name = "user_app/profile.html"
@@ -130,5 +134,6 @@ class ProfileView(LoginRequiredMixin, Breadcrumbs, SuccessMessageMixin, UpdateVi
             reviews=(
                 self.object.reviews.select_related("book").order_by("-created_at")
             ),
+            **diary_context(self.object),
         )
         return context

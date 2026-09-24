@@ -1,0 +1,61 @@
+{# Колонки дневника из build_diary(). Ждёт columns; editable — показывать кнопки статуса и правку записей. #}
+<style>
+    .diary-book + .diary-book {
+        border-top: 1px solid rgba(0, 0, 0, .125);
+    }
+
+    .diary-history summary {
+        cursor: pointer;
+    }
+</style>
+
+<div class="row row-cols-1 row-cols-md-2 row-cols-xl-4 g-4">
+    {% for column in columns %}
+    <div class="col">
+        <section class="card shadow-sm h-100 diary-column" data-status="{{ column.status }}">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h2 class="h6 mb-0">{{ column.title }}</h2>
+                <span class="badge bg-primary rounded-pill diary-count">{{ column.count }}</span>
+            </div>
+
+            <div class="card-body p-0">
+                {% for item in column.books %}
+                <article class="diary-book p-3">
+                    <h3 class="h6 mb-1">
+                        <a href="{{ item.book.get_absolute_url }}">{{ item.book.title }}</a>
+                    </h3>
+                    <p class="text-muted small mb-1">{{ item.book.author.name }}</p>
+                    {% include 'bookshelf_app/include/entry_dates.html' with entry=item.entry %}
+
+                    {% if editable %}
+                    <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                        {% include 'bookshelf_app/include/status_buttons.html' with book=item.book actions=item.actions %}
+                        <a href="{% url 'entry_edit' item.entry.pk %}" class="small entry-edit">Изменить</a>
+                    </div>
+                    {% endif %}
+
+                    {% if item.history %}
+                    <details class="diary-history small mt-2">
+                        <summary class="text-muted">История прочтений ({{ item.readings_count }})</summary>
+                        <ul class="list-unstyled mb-0 mt-1 ps-2 border-start">
+                            {% for past in item.history %}
+                            <li>
+                                {{ past.get_status_display }}
+                                {% include 'bookshelf_app/include/entry_dates.html' with entry=past inline=True %}
+                                {% if editable %}
+                                <a href="{% url 'entry_edit' past.pk %}" class="entry-edit">изменить</a>
+                                {% endif %}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </details>
+                    {% endif %}
+                </article>
+                {% empty %}
+                <p class="text-muted fst-italic small p-3 mb-0">Здесь пока пусто.</p>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+    {% endfor %}
+</div>

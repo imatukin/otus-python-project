@@ -1,0 +1,12 @@
+{# Кнопки смены статуса книги в дневнике. Ждёт book и actions; next — куда вернуться (по умолчанию — сюда же). #}
+{% if actions %}
+<form method="post" action="{% url 'book_status' book.pk %}" class="d-flex flex-wrap gap-1 status-buttons{% if form_class %} {{ form_class }}{% endif %}">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next|default:request.get_full_path }}" />
+    {% for action in actions %}
+    <button type="submit" name="status" value="{{ action.status }}" class="btn btn-outline-success btn-sm">
+        {{ action.label }}
+    </button>
+    {% endfor %}
+</form>
+{% endif %}

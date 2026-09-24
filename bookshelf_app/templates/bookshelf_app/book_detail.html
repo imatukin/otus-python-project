@@ -18,7 +18,10 @@
     <div class="card shadow-sm mb-4">
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-start gap-3">
-                <h1 class="h3 card-title mb-1">{{ book.title }}</h1>
+                <h1 class="h3 card-title mb-1">
+                    {{ book.title }}
+                    {% include 'bookshelf_app/include/pending_badge.html' %}
+                </h1>
                 {% if user.is_authenticated %}
                 <div class="d-flex gap-2 flex-shrink-0">
                     <a href="{% url 'book_edit' book.id %}" class="btn btn-outline-primary btn-sm">
@@ -44,6 +47,15 @@
             </p>
             {% endif %}
 
+            {% if book.is_pending %}
+            <div class="alert alert-warning small pending-hint" role="alert">
+                Книга добавлена быстро: заполнены только название и автор.
+                {% if user.is_authenticated %}
+                <a href="{% url 'book_edit' book.id %}" class="alert-link">Дополните её</a> — жанры, год, описание.
+                {% endif %}
+            </div>
+            {% endif %}
+
             {% if book.description %}
             <p class="card-text">{{ book.description }}</p>
             {% else %}
@@ -62,6 +74,26 @@
             {% include 'bookshelf_app/include/added_by.html' %}
         </div>
     </div>
+
+    {% if user.is_authenticated %}
+    <section class="card shadow-sm mb-4 my-diary">
+        <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div>
+                <h2 class="h6 mb-1">Мой дневник</h2>
+                {% if entry %}
+                <p class="mb-0">
+                    <span class="badge bg-primary entry-status">{{ entry.get_status_display }}</span>
+                    <a href="{% url 'entry_edit' entry.pk %}" class="small ms-2 entry-edit">Изменить запись</a>
+                </p>
+                {% include 'bookshelf_app/include/entry_dates.html' %}
+                {% else %}
+                <p class="text-muted small mb-0">Книги пока нет в вашем дневнике.</p>
+                {% endif %}
+            </div>
+            {% include 'bookshelf_app/include/status_buttons.html' with actions=status_actions %}
+        </div>
+    </section>
+    {% endif %}
 
     <div class="d-flex align-items-center justify-content-between mb-3">
         <h2 class="h4 mb-0">Отзывы</h2>

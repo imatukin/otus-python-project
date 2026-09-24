@@ -1,0 +1,8 @@
+{# Дневник читателя на его странице и в профиле. editable — своя страница: можно менять статусы и записи. #}
+<section class="mb-4 reader-diary">
+    <div class="d-flex align-items-center justify-content-between mb-3 gap-3">
+        <h2 class="h5 mb-0">Дневник</h2>
+        <span class="badge bg-secondary diary-total">Книг в дневнике: {{ diary_total }}</span>
+    </div>
+    {% include 'bookshelf_app/include/diary_columns.html' %}
+</section>

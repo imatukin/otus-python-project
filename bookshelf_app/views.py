@@ -1,23 +1,60 @@
-"""Представления каталога: список книг, страница книги и её редактирование."""
+"""Представления каталога и дневника: книги, смена статуса, записи дневника."""
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.http import HttpResponseRedirect
+from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views import View
 from django.views.generic import (
     CreateView,
     DeleteView,
     DetailView,
+    FormView,
     ListView,
     TemplateView,
     UpdateView,
 )
 
-from bookshelf_app.diary import build_diary
-from bookshelf_app.forms import BookForm
-from bookshelf_app.models import Book
+from bookshelf_app.diary import (
+    StatusTransitionError,
+    build_diary,
+    change_status,
+    latest_entry,
+    status_actions,
+    with_diary_status,
+)
+from bookshelf_app.forms import BookForm, QuickBookForm, ReadingEntryForm
+from bookshelf_app.models import Book, ReadingEntry
 from .tasks import log_new_book_task
+
+# Сколько книг показываем в результатах поиска при быстром добавлении.
+SEARCH_LIMIT = 20
+
+
+def log_new_book(book):
+    """Ставит фоновую задачу «в каталог добавлена книга» — книга уже должна быть сохранена."""
+    log_new_book_task.delay(
+        book_id=book.pk,
+        title=book.title,
+        author=str(book.author),
+        added_by=str(book.added_by),
+    )
+
+
+def with_status_actions(books, user):
+    """Выборка книг, у каждой из которых есть кнопки смены статуса (`book.status_actions`).
+
+    Гостю кнопки не положены — выборка возвращается как есть.
+    """
+    if not user.is_authenticated:
+        return books
+    books = with_diary_status(books, user)
+    for book in books:
+        book.status_actions = status_actions(book.diary_status)
+    return books
 
 
 class Breadcrumbs:
@@ -35,6 +72,12 @@ class Breadcrumbs:
         return context
 
 
+def diary_context(reader):
+    """Колонки дневника и общий счётчик — для главной и страниц читателя."""
+    columns = build_diary(reader)
+    return {"columns": columns, "diary_total": sum(column.count for column in columns)}
+
+
 class IndexView(TemplateView):
     """Главная страница: гостю — приветствие, читателю — его дневник по колонкам статусов."""
 
@@ -43,11 +86,7 @@ class IndexView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         if self.request.user.is_authenticated:
-            columns = build_diary(self.request.user)
-            context.update(
-                columns=columns,
-                diary_total=sum(column.count for column in columns),
-            )
+            context.update(diary_context(self.request.user))
         return context
 
 
@@ -98,6 +137,11 @@ class BookListView(BookBase, ListView):
             .prefetch_related("genres")
         )
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["books"] = with_status_actions(context["books"], self.request.user)
+        return context
+
 
 class BookDetailView(BookObjectBase, DetailView):
     """Страница одной книги: информация о книге и список отзывов."""
@@ -112,6 +156,10 @@ class BookDetailView(BookObjectBase, DetailView):
         )
         context["page_title"] = self.object.title
         context["can_delete"] = self.object.can_be_deleted_by(self.request.user)
+        if self.request.user.is_authenticated:
+            entry = latest_entry(self.request.user, self.object)
+            context["entry"] = entry
+            context["status_actions"] = status_actions(entry.status if entry else None)
         return context
 
 
@@ -139,14 +187,7 @@ class BookCreateView(LoginRequiredMixin, BookBase, SuccessMessageMixin, CreateVi
         """Книгу в каталог добавляет тот, кто заполнил форму."""
         form.instance.added_by = self.request.user
         response = super().form_valid(form)
-
-        book = self.object
-        log_new_book_task.delay(
-            book_id=book.pk,
-            title=book.title,
-            author=str(book.author),
-            added_by=str(book.added_by),
-        )
+        log_new_book(self.object)
         return response
 
 
@@ -169,6 +210,11 @@ class BookUpdateView(LoginRequiredMixin, BookObjectBase, SuccessMessageMixin, Up
             cancel_url=reverse("book_detail", args=[self.object.pk]),
         )
         return context
+
+    def form_valid(self, form):
+        """Сохранённая полной формой книга — уже не черновик из быстрого добавления."""
+        form.instance.is_pending = False
+        return super().form_valid(form)
 
 
 class BookDeleteView(LoginRequiredMixin, UserPassesTestMixin, BookObjectBase, DeleteView):
@@ -199,3 +245,145 @@ class BookDeleteView(LoginRequiredMixin, UserPassesTestMixin, BookObjectBase, De
         self.object.delete(user=self.request.user)
         messages.success(self.request, f"Книга «{self.object.title}» удалена из каталога.")
         return HttpResponseRedirect(self.get_success_url())
+
+
+class ReadingStatusView(LoginRequiredMixin, View):
+    """Смена статуса книги в дневнике кнопкой: POST с полем `status`.
+
+    После смены возвращаемся туда, откуда нажали кнопку (`next`), иначе — на страницу книги.
+    """
+
+    http_method_names = ["post"]
+
+    def post(self, request, pk):
+        """Меняет статус и возвращает на исходную страницу."""
+        book = get_object_or_404(Book, pk=pk)
+        try:
+            entry = change_status(request.user, book, request.POST.get("status"))
+        except StatusTransitionError:
+            messages.error(request, f"Статус книги «{book.title}» так поменять нельзя.")
+        else:
+            messages.success(request, f"Дневник обновлён: {entry}.")
+        return HttpResponseRedirect(self.get_redirect_url(book))
+
+    def get_redirect_url(self, book):
+        """Адрес из `next`, если он ведёт на наш сайт, иначе — страница книги."""
+        url = self.request.POST.get("next")
+        if url and url_has_allowed_host_and_scheme(
+            url, allowed_hosts={self.request.get_host()}, require_https=self.request.is_secure()
+        ):
+            return url
+        return book.get_absolute_url()
+
+
+class EntryBase(LoginRequiredMixin, Breadcrumbs):
+    """Базовая view для своей записи дневника: чужие записи и записи удалённых книг — 404."""
+
+    # self.object появляется из SingleObjectMixin у конкретных view.
+    # pylint: disable=no-member
+
+    model = ReadingEntry
+    success_url = reverse_lazy("index")
+
+    def get_queryset(self):
+        """Только свои записи о неудалённых книгах."""
+        return ReadingEntry.objects.filter(
+            reader=self.request.user, book__is_deleted=False
+        ).select_related("book")
+
+    def get_breadcrumbs(self):
+        book = self.object.book
+        return super().get_breadcrumbs() + [{"title": book.title, "url": book.get_absolute_url()}]
+
+
+class ReadingEntryUpdateView(EntryBase, UpdateView):
+    """Правка записи дневника: статус и даты."""
+
+    form_class = ReadingEntryForm
+    template_name = "bookshelf_app/book_form.html"
+
+    def get_breadcrumbs(self):
+        return super().get_breadcrumbs() + [{"title": "Запись дневника"}]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(
+            page_title=f"Запись дневника: {self.object.book.title}",
+            form_subtitle="Статус и даты прочтения. Даты при смене статуса кнопками ставятся сами, "
+                          "здесь их можно поправить.",
+            submit_label="Сохранить",
+            cancel_url=reverse("index"),
+            delete_url=reverse("entry_delete", args=[self.object.pk]),
+        )
+        return context
+
+    def form_valid(self, form):
+        messages.success(self.request, f"Запись сохранена: {form.instance}.")
+        return super().form_valid(form)
+
+
+class ReadingEntryDeleteView(EntryBase, DeleteView):
+    """Удаление записи дневника — мягкое, как и всё на сайте."""
+
+    template_name = "bookshelf_app/entry_delete.html"
+    context_object_name = "entry"
+
+    def get_breadcrumbs(self):
+        return super().get_breadcrumbs() + [{"title": "Удаление записи"}]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = f"Удаление записи: {self.object.book.title}"
+        return context
+
+    def form_valid(self, form):
+        """Помечаем запись удалённой от имени читателя."""
+        self.object.delete(user=self.request.user)
+        messages.success(self.request, f"Запись о книге «{self.object.book.title}» удалена из дневника.")
+        return HttpResponseRedirect(self.get_success_url())
+
+
+class DiaryAddView(LoginRequiredMixin, Breadcrumbs, FormView):
+    """Добавление книги в дневник: поиск по каталогу, а если книги нет — короткая форма.
+
+    Строка поиска — в GET-параметре `q`; форма отправляется на тот же адрес,
+    так что при ошибке запрос не теряется.
+    """
+
+    form_class = QuickBookForm
+    template_name = "bookshelf_app/diary_add.html"
+    success_url = reverse_lazy("index")
+
+    def get_query(self):
+        """Строка поиска без лишних пробелов."""
+        return " ".join(self.request.GET.get("q", "").split())
+
+    def get_initial(self):
+        """Название книги в форме — то, что искали."""
+        return {**super().get_initial(), "title": self.get_query()}
+
+    def get_breadcrumbs(self):
+        return super().get_breadcrumbs() + [{"title": "Добавить в дневник"}]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        query = self.get_query()
+        results = []
+        if query:
+            books = (
+                Book.objects.filter(title__icontains=query)
+                .select_related("author")
+                .order_by("title")[:SEARCH_LIMIT]
+            )
+            results = with_status_actions(books, self.request.user)
+        context.update(page_title="Добавить книгу в дневник", query=query, results=results)
+        return context
+
+    def form_valid(self, form):
+        book = form.save(self.request.user)
+        log_new_book(book)
+        messages.success(
+            self.request,
+            f"Книга «{book.title}» добавлена в каталог черновиком и в ваш дневник.",
+        )
+        return super().form_valid(form)

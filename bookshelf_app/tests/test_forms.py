@@ -4,7 +4,8 @@ import datetime
 
 import pytest
 
-from bookshelf_app.forms import MIN_PUBLISHED_YEAR, BookForm
+from bookshelf_app.forms import MIN_PUBLISHED_YEAR, BookForm, QuickBookForm, ReadingEntryForm
+from bookshelf_app.models import Author, Book, ReadingEntry, ReadingStatus
 
 CURRENT_YEAR = datetime.date.today().year
 
@@ -248,3 +249,145 @@ class TestDuplicates:
             "author": book.author.pk,
         }
         assert not BookForm(data=data).is_valid()
+
+
+class TestReadingEntryForm:
+    """Правка записи дневника."""
+
+    def test_fields(self):
+        assert list(ReadingEntryForm().fields) == ["status", "started_at", "finished_at"]
+
+    def test_date_widgets(self):
+        form = ReadingEntryForm()
+        for name in ("started_at", "finished_at"):
+            assert form.fields[name].widget.input_type == "date"
+
+    @pytest.mark.django_db
+    def test_initial_dates_in_iso(self, entry):
+        html = str(ReadingEntryForm(instance=entry)["started_at"])
+        assert 'value="2026-01-10"' in html
+
+    @pytest.mark.django_db
+    def test_valid(self, entry):
+        form = ReadingEntryForm(
+            {"status": "read", "started_at": "2026-01-10", "finished_at": "2026-02-01"}, instance=entry
+        )
+        assert form.is_valid(), form.errors
+        form.save()
+        entry.refresh_from_db()
+        assert entry.status == ReadingStatus.READ
+        assert entry.finished_at == datetime.date(2026, 2, 1)
+
+    @pytest.mark.django_db
+    def test_dates_optional(self, entry):
+        form = ReadingEntryForm({"status": "planned", "started_at": "", "finished_at": ""}, instance=entry)
+        assert form.is_valid(), form.errors
+
+    @pytest.mark.django_db
+    def test_finish_before_start(self, entry):
+        form = ReadingEntryForm(
+            {"status": "read", "started_at": "2026-02-01", "finished_at": "2026-01-01"}, instance=entry
+        )
+        assert not form.is_valid()
+        assert form.errors["finished_at"] == ["Дата окончания раньше даты начала чтения."]
+
+    @pytest.mark.django_db
+    def test_unknown_status(self, entry):
+        form = ReadingEntryForm({"status": "lost"}, instance=entry)
+        assert "status" in form.errors
+
+
+@pytest.fixture
+def quick_data():
+    """Корректные данные для QuickBookForm."""
+    return {"title": "Белая гвардия", "author": "Михаил Булгаков", "status": "planned"}
+
+
+class TestQuickBookForm:
+    """Быстрое добавление книги из дневника."""
+
+    def test_fields(self):
+        assert list(QuickBookForm().fields) == ["title", "author", "status"]
+
+    def test_status_choices_are_first_steps(self):
+        values = [value for value, _ in QuickBookForm().fields["status"].choices]
+        assert values == ["planned", "reading", "read"]
+
+    def test_status_default(self):
+        assert QuickBookForm().fields["status"].initial == ReadingStatus.PLANNED
+
+    @pytest.mark.parametrize("field", ["title", "author"])
+    def test_required(self, quick_data, field):
+        quick_data[field] = ""
+        form = QuickBookForm(quick_data)
+        assert not form.is_valid()
+        assert field in form.errors
+
+    def test_error_messages(self):
+        form = QuickBookForm({"status": "planned"})
+        assert form.errors["title"] == ["Название книги не заполнено."]
+        assert form.errors["author"] == ["Укажите автора книги."]
+
+    @pytest.mark.django_db
+    def test_spaces_squashed(self, quick_data):
+        quick_data.update(title="  Белая   гвардия ", author=" Михаил  Булгаков ")
+        form = QuickBookForm(quick_data)
+        assert form.is_valid(), form.errors
+        assert form.cleaned_data["title"] == "Белая гвардия"
+        assert form.cleaned_data["author"] == "Михаил Булгаков"
+
+    @pytest.mark.django_db
+    def test_abandoned_not_allowed(self, quick_data):
+        quick_data["status"] = "abandoned"
+        assert "status" in QuickBookForm(quick_data).errors
+
+    @pytest.mark.django_db
+    def test_duplicate_rejected(self, book, quick_data):
+        quick_data.update(title=book.title.upper(), author=book.author.name.lower())
+        form = QuickBookForm(quick_data)
+        assert not form.is_valid()
+        assert "уже есть в каталоге" in form.errors["title"][0]
+
+    @pytest.mark.django_db
+    def test_same_title_other_author_allowed(self, book, quick_data):
+        quick_data["title"] = book.title
+        quick_data["author"] = "Другой автор"
+        assert QuickBookForm(quick_data).is_valid()
+
+    @pytest.mark.django_db
+    def test_save_uses_existing_author(self, author, user_1, quick_data):
+        quick_data["author"] = author.name.upper()
+        form = QuickBookForm(quick_data)
+        assert form.is_valid(), form.errors
+        book = form.save(user_1)
+        assert book.author == author
+        assert Author.objects.count() == 1
+
+    @pytest.mark.django_db
+    def test_save_creates_author(self, user_1, quick_data):
+        form = QuickBookForm(quick_data)
+        assert form.is_valid(), form.errors
+        book = form.save(user_1)
+        assert book.author.name == "Михаил Булгаков"
+
+    @pytest.mark.django_db
+    def test_deleted_author_not_reused(self, author, user_1, quick_data):
+        author.delete()
+        form = QuickBookForm(quick_data)
+        assert form.is_valid(), form.errors
+        assert form.save(user_1).author != author
+
+    @pytest.mark.django_db
+    def test_save_creates_pending_book_and_entry(self, user_1, quick_data):
+        quick_data["status"] = "reading"
+        form = QuickBookForm(quick_data)
+        assert form.is_valid(), form.errors
+        book = form.save(user_1)
+
+        book = Book.objects.get(pk=book.pk)
+        assert book.title == "Белая гвардия"
+        assert book.is_pending is True
+        assert book.added_by == user_1
+        entry = ReadingEntry.objects.get(book=book)
+        assert (entry.reader, entry.status) == (user_1, ReadingStatus.READING)
+        assert entry.started_at is not None

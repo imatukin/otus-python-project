@@ -1,11 +1,19 @@
-"""Формы каталога книг."""
+"""Формы каталога книг и дневника."""
 
 import datetime
 
 from django import forms
-from bookshelf_app.models import Author, Book, Genre
+from django.db import transaction
+
+from bookshelf_app.diary import TRANSITIONS, change_status
+from bookshelf_app.models import Author, Book, Genre, ReadingEntry, ReadingStatus
 
 MIN_PUBLISHED_YEAR = 1450
+
+
+def _squash_spaces(value):
+    """Строка без лишних пробелов внутри и по краям."""
+    return " ".join(value.split())
 
 
 class BookForm(forms.ModelForm):
@@ -68,7 +76,7 @@ class BookForm(forms.ModelForm):
 
     def clean_title(self):
         """Убираем лишние пробелы в названии."""
-        return " ".join(self.cleaned_data["title"].split())
+        return _squash_spaces(self.cleaned_data["title"])
 
     def clean_published_year(self):
         """Год издания должен быть правдоподобным."""
@@ -106,3 +114,89 @@ class BookForm(forms.ModelForm):
                 )
 
         return cleaned_data
+
+
+class ReadingEntryForm(forms.ModelForm):
+    """Правка записи дневника: статус и даты прочтения."""
+
+    class Meta:
+        model = ReadingEntry
+        fields = ("status", "started_at", "finished_at")
+        help_texts = {
+            "started_at": "Когда начали читать. Можно оставить пустым.",
+            "finished_at": "Когда дочитали или бросили.",
+        }
+        widgets = {
+            "status": forms.Select(attrs={"class": "form-select"}),
+            # Браузерный календарь понимает только ISO-формат даты.
+            "started_at": forms.DateInput(
+                attrs={"class": "form-control", "type": "date"}, format="%Y-%m-%d"
+            ),
+            "finished_at": forms.DateInput(
+                attrs={"class": "form-control", "type": "date"}, format="%Y-%m-%d"
+            ),
+        }
+
+
+class QuickBookForm(forms.Form):
+    """Быстрое добавление книги из дневника: только название и автор строкой.
+
+    Книга попадает в каталог черновиком (`is_pending`), а в дневник — сразу с выбранным статусом.
+    """
+
+    title = forms.CharField(
+        label="Название",
+        max_length=Book._meta.get_field("title").max_length,
+        error_messages={"required": "Название книги не заполнено."},
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+    author = forms.CharField(
+        label="Автор",
+        max_length=Author._meta.get_field("name").max_length,
+        error_messages={"required": "Укажите автора книги."},
+        help_text="Имя и фамилия. Если такого автора нет в каталоге, он будет добавлен.",
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Например, Михаил Булгаков"}),
+    )
+    status = forms.ChoiceField(
+        label="В дневник как",
+        # Книги в дневнике ещё нет — доступны те же статусы, что и у кнопок.
+        choices=[(status.value, status.label) for status in TRANSITIONS[None]],
+        initial=ReadingStatus.PLANNED,
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+
+    def clean_title(self):
+        """Убираем лишние пробелы в названии."""
+        return _squash_spaces(self.cleaned_data["title"])
+
+    def clean_author(self):
+        """Убираем лишние пробелы в имени автора."""
+        return _squash_spaces(self.cleaned_data["author"])
+
+    def clean(self):
+        """Та же книга того же автора уже есть — второй черновик не нужен."""
+        cleaned_data = super().clean()
+        title = cleaned_data.get("title")
+        author = cleaned_data.get("author")
+        if title and author and Book.objects.filter(
+            title__iexact=title, author__name__iexact=author
+        ).exists():
+            self.add_error("title", f"Книга «{title}» этого автора уже есть в каталоге — найдите её поиском.")
+        return cleaned_data
+
+    @transaction.atomic
+    def save(self, user):
+        """Заводит книгу-черновик (и автора, если его нет) и добавляет её в дневник `user`."""
+        name = self.cleaned_data["author"]
+        author = Author.objects.filter(name__iexact=name).order_by("pk").first()
+        if author is None:
+            author = Author.objects.create(name=name)
+
+        book = Book.objects.create(
+            title=self.cleaned_data["title"],
+            author=author,
+            is_pending=True,
+            added_by=user,
+        )
+        change_status(user, book, self.cleaned_data["status"])
+        return book

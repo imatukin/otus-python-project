@@ -7,7 +7,7 @@ import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from PIL import Image
 
-from bookshelf_app.models import Author, Book, Review
+from bookshelf_app.models import Author, Book, ReadingEntry, ReadingStatus, Review
 from user_app.models import CustomUser
 
 PASSWORD = "12345"
@@ -123,6 +123,12 @@ def reviews(book, author, user_1):
             (other, "Тяжело читать.", 3),
         )
     ]
+
+
+@pytest.fixture
+def entry(book, user_1):
+    """Запись дневника: user_1 читает свою книгу."""
+    return ReadingEntry.objects.create(reader=user_1, book=book, status=ReadingStatus.READING)
 
 
 # --- Данные для форм ---

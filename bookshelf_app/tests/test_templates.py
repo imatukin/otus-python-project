@@ -6,7 +6,7 @@ import pytest
 from bs4 import BeautifulSoup
 from django.urls import reverse
 
-from bookshelf_app.models import ReadingEntry, Review
+from bookshelf_app.models import Book, ReadingEntry, Review
 
 # Все шаблоны рендерятся через клиент и почти везде опираются на данные из базы.
 pytestmark = pytest.mark.django_db
@@ -25,6 +25,11 @@ def review_cards(soup):
 def text_of(tag):
     """Текст тега без лишних пробелов и переносов строк."""
     return " ".join(tag.get_text().split())
+
+
+def status_buttons(tag):
+    """Кнопки смены статуса внутри тега: [(надпись, статус)]."""
+    return [(text_of(button), button["value"]) for button in tag.select(".status-buttons button")]
 
 
 class TestBaseTemplate:
@@ -295,7 +300,7 @@ class TestIndexDiaryTemplate:
         card = self.get_column(soup, "reading").select_one(".diary-book")
         history = card.select_one(".diary-history")
         assert text_of(history.summary) == "История прочтений (2)"
-        assert [text_of(item) for item in history.select("li")] == ["Прочитано 01.01.2025 — 01.02.2025"]
+        assert [text_of(item) for item in history.select("li")] == ["Прочитано 01.01.2025 — 01.02.2025 изменить"]
         assert self.get_column(soup, "read").select_one(".diary-book") is None
 
     def test_no_history_for_single_reading(self, auth_client, entry):  # pylint: disable=unused-argument
@@ -698,3 +703,226 @@ class TestBookDeleteTemplate:
         cancel = soup.select_one(".card-footer a")
         assert text_of(cancel) == "Отмена"
         assert cancel["href"] == book.get_absolute_url()
+
+
+class TestStatusButtonsTemplate:
+    """Кнопки смены статуса — общий кусок для каталога, страницы книги и дневника."""
+
+    def test_form_attributes(self, auth_client, book):
+        soup = get_soup(auth_client.get(book.get_absolute_url()))
+        form = soup.select_one(".my-diary form.status-buttons")
+        assert form["method"] == "post"
+        assert form["action"] == reverse("book_status", args=[book.pk])
+        assert form.select_one('input[name="csrfmiddlewaretoken"]') is not None
+        assert form.select_one('input[name="next"]')["value"] == book.get_absolute_url()
+
+    def test_buttons_submit_status(self, auth_client, book):
+        soup = get_soup(auth_client.get(book.get_absolute_url()))
+        buttons = soup.select(".my-diary .status-buttons button")
+        assert {button["name"] for button in buttons} == {"status"}
+        assert {button["type"] for button in buttons} == {"submit"}
+
+    def test_next_keeps_query_string(self, auth_client, book):  # pylint: disable=unused-argument
+        soup = get_soup(auth_client.get(reverse("books"), {"page": "1"}))
+        assert soup.select_one('.status-buttons input[name="next"]')["value"] == f"{reverse('books')}?page=1"
+
+
+class TestBooksStatusTemplate:
+    """Кнопки статуса и бейдж черновика в каталоге."""
+
+    def test_no_buttons_for_guest(self, client, book):  # pylint: disable=unused-argument
+        assert not get_soup(client.get(reverse("books"))).select(".status-buttons")
+
+    def test_buttons_for_book_not_in_diary(self, auth_client, book):  # pylint: disable=unused-argument
+        card = get_soup(auth_client.get(reverse("books"))).select_one(".book-card")
+        assert status_buttons(card) == [("Хочу прочитать", "planned"), ("Читаю", "reading"), ("Прочитано", "read")]
+
+    def test_buttons_follow_diary(self, auth_client, entry):  # pylint: disable=unused-argument
+        card = get_soup(auth_client.get(reverse("books"))).select_one(".book-card")
+        assert status_buttons(card) == [("Прочитано", "read"), ("Бросил", "abandoned")]
+
+    def test_buttons_above_stretched_link(self, auth_client, book):  # pylint: disable=unused-argument
+        form = get_soup(auth_client.get(reverse("books"))).select_one(".book-card .status-buttons")
+        assert "position-relative" in form["class"]
+
+    def test_pending_badge(self, client, book, book_of_user_2):
+        book.is_pending = True
+        book.save()
+        cards = get_soup(client.get(reverse("books"))).select(".book-card")
+        badges = {text_of(card.h2.a): card.select_one(".pending-badge") for card in cards}
+        assert text_of(badges[book.title]) == "черновик"
+        assert badges[book_of_user_2.title] is None
+
+
+class TestBookDetailDiaryTemplate:
+    """Блок «Мой дневник» на странице книги."""
+
+    def test_hidden_for_guest(self, client, book):
+        soup = get_soup(client.get(book.get_absolute_url()))
+        assert soup.select_one(".my-diary") is None
+        assert not soup.select(".status-buttons")
+
+    def test_book_not_in_diary(self, auth_client, book):
+        block = get_soup(auth_client.get(book.get_absolute_url())).select_one(".my-diary")
+        assert "Книги пока нет в вашем дневнике." in text_of(block)
+        assert block.select_one(".entry-edit") is None
+        assert status_buttons(block) == [("Хочу прочитать", "planned"), ("Читаю", "reading"), ("Прочитано", "read")]
+
+    def test_entry_status_dates_and_edit_link(self, auth_client, book, entry):
+        block = get_soup(auth_client.get(book.get_absolute_url())).select_one(".my-diary")
+        assert text_of(block.select_one(".entry-status")) == "Читаю"
+        assert text_of(block.select_one(".entry-dates")) == "с 10.01.2026"
+        assert block.select_one(".entry-edit")["href"] == reverse("entry_edit", args=[entry.pk])
+        assert status_buttons(block) == [("Прочитано", "read"), ("Бросил", "abandoned")]
+
+    def test_finished_offers_rereading(self, auth_client, book, entry):
+        entry.apply_status("read")
+        entry.save()
+        block = get_soup(auth_client.get(book.get_absolute_url())).select_one(".my-diary")
+        assert status_buttons(block) == [("Хочу прочитать", "planned"), ("Перечитать", "reading")]
+
+    def test_pending_badge_and_hint(self, auth_client, book):
+        book.is_pending = True
+        book.save()
+        soup = get_soup(auth_client.get(book.get_absolute_url()))
+        assert text_of(soup.h1.select_one(".pending-badge")) == "черновик"
+        hint = soup.select_one(".pending-hint")
+        assert hint.select_one("a")["href"] == reverse("book_edit", args=[book.pk])
+
+    def test_pending_hint_without_link_for_guest(self, client, book):
+        book.is_pending = True
+        book.save()
+        hint = get_soup(client.get(book.get_absolute_url())).select_one(".pending-hint")
+        assert hint is not None
+        assert hint.select_one("a") is None
+
+    def test_no_pending_hint(self, client, book):
+        soup = get_soup(client.get(book.get_absolute_url()))
+        assert soup.select_one(".pending-hint") is None
+        assert soup.select_one(".pending-badge") is None
+
+
+class TestIndexDiaryActionsTemplate:
+    """Кнопки и правка записей в своём дневнике на главной."""
+
+    def test_status_buttons_on_card(self, auth_client, entry):  # pylint: disable=unused-argument
+        card = get_soup(auth_client.get(reverse("index"))).select_one(".diary-book")
+        assert status_buttons(card) == [("Прочитано", "read"), ("Бросил", "abandoned")]
+        assert card.select_one('.status-buttons input[name="next"]')["value"] == reverse("index")
+
+    def test_edit_link(self, auth_client, entry):
+        card = get_soup(auth_client.get(reverse("index"))).select_one(".diary-book")
+        assert card.select_one(".entry-edit")["href"] == reverse("entry_edit", args=[entry.pk])
+
+    def test_history_edit_links(self, auth_client, book, user_1):
+        old = ReadingEntry.objects.create(reader=user_1, book=book, status="read")
+        ReadingEntry.objects.create(reader=user_1, book=book, status="reading")
+        history = get_soup(auth_client.get(reverse("index"))).select_one(".diary-history")
+        assert history.select_one(".entry-edit")["href"] == reverse("entry_edit", args=[old.pk])
+
+    def test_search_form(self, auth_client):
+        form = get_soup(auth_client.get(reverse("index"))).select_one("form.diary-search")
+        assert form["method"] == "get"
+        assert form["action"] == reverse("diary_add")
+        assert form.select_one('input[name="q"]') is not None
+
+
+class TestBookFormDeleteButton:
+    """Кнопка «Удалить» в общем шаблоне формы."""
+
+    def test_entry_form_has_delete(self, auth_client, entry):
+        soup = get_soup(auth_client.get(reverse("entry_edit", args=[entry.pk])))
+        link = soup.select_one("form a.btn-outline-danger")
+        assert text_of(link) == "Удалить"
+        assert link["href"] == reverse("entry_delete", args=[entry.pk])
+
+    def test_book_form_without_delete(self, auth_client):
+        soup = get_soup(auth_client.get(reverse("book_add")))
+        assert soup.select_one("form a.btn-outline-danger") is None
+
+    def test_entry_form_fields(self, auth_client, entry):
+        soup = get_soup(auth_client.get(reverse("entry_edit", args=[entry.pk])))
+        assert soup.select_one('select[name="status"]') is not None
+        assert soup.select_one('input[name="started_at"]')["type"] == "date"
+        assert soup.select_one('input[name="finished_at"]')["type"] == "date"
+
+
+class TestEntryDeleteTemplate:
+    """Подтверждение удаления записи дневника."""
+
+    def test_content(self, auth_client, entry, book):
+        soup = get_soup(auth_client.get(reverse("entry_delete", args=[entry.pk])))
+        assert text_of(soup.title) == f"Удаление записи: {book.title}"
+        assert text_of(soup.main.h1) == "Удалить запись дневника?"
+        assert text_of(soup.main.h2) == book.title
+        assert text_of(soup.select_one(".entry-status")) == "Читаю"
+        assert text_of(soup.select_one(".entry-dates")) == "с 10.01.2026"
+
+    def test_confirm_form(self, auth_client, entry):
+        soup = get_soup(auth_client.get(reverse("entry_delete", args=[entry.pk])))
+        form = soup.select_one(".card-footer form")
+        assert form["method"] == "post"
+        assert form.select_one('input[name="csrfmiddlewaretoken"]') is not None
+        assert text_of(form.select_one("button[type=submit]")) == "Удалить запись"
+        assert form.select_one("a")["href"] == reverse("entry_edit", args=[entry.pk])
+
+
+class TestDiaryAddTemplate:
+    """Страница быстрого добавления книги в дневник."""
+
+    def get(self, client, query=None):
+        """Страница поиска, разобранная в дерево."""
+        params = {"q": query} if query is not None else {}
+        return get_soup(client.get(reverse("diary_add"), params))
+
+    def test_hint_without_query(self, auth_client):
+        soup = self.get(auth_client)
+        assert soup.select_one(".search-hint") is not None
+        assert soup.select_one(".quick-add") is None
+        assert soup.select_one(".search-results") is None
+
+    def test_search_field_keeps_query(self, auth_client):
+        soup = self.get(auth_client, "Бег")
+        assert soup.select_one('form.diary-search input[name="q"]')["value"] == "Бег"
+
+    def test_not_found_dialog(self, auth_client):
+        soup = self.get(auth_client, "Бег")
+        assert soup.select_one(".search-results") is None
+        quick = soup.select_one(".quick-add")
+        assert text_of(quick.h2) == "Такой книги нет в базе, добавить?"
+        assert quick.select_one('input[name="title"]')["value"] == "Бег"
+        assert quick.select_one('input[name="author"]') is not None
+        assert quick.select_one('select[name="status"]') is not None
+        assert quick.select_one("form")["method"] == "post"
+
+    def test_results(self, auth_client, book, entry):  # pylint: disable=unused-argument
+        soup = self.get(auth_client, "Мастер")
+        [item] = soup.select(".search-result")
+        assert item.a["href"] == book.get_absolute_url()
+        assert book.author.name in text_of(item)
+        assert status_buttons(item) == [("Прочитано", "read"), ("Бросил", "abandoned")]
+        assert item.select_one('input[name="next"]')["value"] == reverse("index")
+
+    def test_results_offer_new_book(self, auth_client, book):  # pylint: disable=unused-argument
+        soup = self.get(auth_client, "Мастер")
+        assert text_of(soup.select_one(".quick-add h2")) == "Нужной книги нет в списке? Добавьте её"
+
+    def test_pending_badge_in_results(self, auth_client, book):
+        book.is_pending = True
+        book.save()
+        soup = self.get(auth_client, "Мастер")
+        assert soup.select_one(".search-result .pending-badge") is not None
+
+    def test_errors_shown(self, auth_client, book):
+        response = auth_client.post(
+            reverse("diary_add"), {"title": book.title, "author": book.author.name, "status": "planned"}
+        )
+        field = get_soup(response).select_one(".quick-add .field-invalid")
+        assert field.select_one('input[name="title"]') is not None
+        assert "уже есть в каталоге" in text_of(field)
+
+    def test_errors_shown_without_query(self, auth_client):
+        response = auth_client.post(reverse("diary_add"), {"status": "planned"})
+        soup = get_soup(response)
+        assert len(soup.select(".quick-add .field-invalid")) == 2
+        assert not Book.objects.exists()
