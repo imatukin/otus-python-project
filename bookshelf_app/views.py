@@ -30,22 +30,12 @@ from bookshelf_app.diary import (
     status_actions,
     with_diary_status,
 )
+from bookshelf_app.events import log_created, log_deleted, log_updated, stored_snapshot
 from bookshelf_app.forms import BookForm, QuickBookForm, ReadingEntryForm, ReviewForm
 from bookshelf_app.models import Book, ReadingEntry, ReadingStatus, Review
-from .tasks import log_new_book_task
 
 # Сколько книг показываем в результатах поиска при быстром добавлении.
 SEARCH_LIMIT = 20
-
-
-def log_new_book(book):
-    """Ставит фоновую задачу «в каталог добавлена книга» — книга уже должна быть сохранена."""
-    log_new_book_task.delay(
-        book_id=book.pk,
-        title=book.title,
-        author=str(book.author),
-        added_by=str(book.added_by),
-    )
 
 
 def with_book_stats(books):
@@ -218,7 +208,7 @@ class BookCreateView(LoginRequiredMixin, BookBase, SuccessMessageMixin, CreateVi
         """Книгу в каталог добавляет тот, кто заполнил форму."""
         form.instance.added_by = self.request.user
         response = super().form_valid(form)
-        log_new_book(self.object)
+        log_created(self.object, self.request.user)
         return response
 
 
@@ -244,8 +234,11 @@ class BookUpdateView(LoginRequiredMixin, BookObjectBase, SuccessMessageMixin, Up
 
     def form_valid(self, form):
         """Сохранённая полной формой книга — уже не черновик из быстрого добавления."""
+        old = stored_snapshot(self.object)
         form.instance.is_pending = False
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        log_updated(self.object, self.request.user, old)
+        return response
 
 
 class BookDeleteView(LoginRequiredMixin, UserPassesTestMixin, BookObjectBase, DeleteView):
@@ -274,6 +267,7 @@ class BookDeleteView(LoginRequiredMixin, UserPassesTestMixin, BookObjectBase, De
     def form_valid(self, form):
         """Помечаем книгу удалённой от имени того, кто нажал кнопку."""
         self.object.delete(user=self.request.user)
+        log_deleted(self.object, self.request.user)
         messages.success(self.request, f"Книга «{self.object.title}» удалена из каталога.")
         return HttpResponseRedirect(self.get_success_url())
 
@@ -422,7 +416,6 @@ class DiaryAddView(LoginRequiredMixin, Breadcrumbs, FormView):
 
     def form_valid(self, form):
         book = form.save(self.request.user)
-        log_new_book(book)
         messages.success(
             self.request,
             f"Книга «{book.title}» добавлена в каталог черновиком и в ваш дневник.",

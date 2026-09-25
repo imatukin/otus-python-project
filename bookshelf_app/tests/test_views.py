@@ -623,15 +623,6 @@ class TestDiaryAddView:
         assert "Книга «Белая гвардия» добавлена в каталог черновиком и в ваш дневник." in messages_of(response)
 
     @pytest.mark.django_db
-    def test_quick_add_logs_new_book(self, auth_client, mocker):
-        delay = mocker.patch("bookshelf_app.views.log_new_book_task.delay")
-        auth_client.post(reverse("diary_add"), {"title": "Бег", "author": "Михаил Булгаков", "status": "read"})
-        book = Book.objects.get(title="Бег")
-        delay.assert_called_once_with(
-            book_id=book.pk, title="Бег", author="Михаил Булгаков", added_by=str(book.added_by),
-        )
-
-    @pytest.mark.django_db
     def test_invalid_form_keeps_query(self, auth_client, book):
         response = auth_client.post(
             f"{reverse('diary_add')}?q=Мастер",

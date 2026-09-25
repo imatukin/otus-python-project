@@ -6,6 +6,7 @@ from django import forms
 from django.db import transaction
 
 from bookshelf_app.diary import TRANSITIONS, change_status
+from bookshelf_app.events import log_created
 from bookshelf_app.models import (
     MAX_RATING,
     MIN_RATING,
@@ -195,11 +196,15 @@ class QuickBookForm(forms.Form):
 
     @transaction.atomic
     def save(self, user):
-        """Заводит книгу-черновик (и автора, если его нет) и добавляет её в дневник `user`."""
+        """Заводит книгу-черновик (и автора, если его нет) и добавляет её в дневник `user`.
+
+        Новые книга и автор попадают в журнал событий.
+        """
         name = self.cleaned_data["author"]
         author = Author.objects.filter(name__iexact=name).order_by("pk").first()
         if author is None:
             author = Author.objects.create(name=name)
+            log_created(author, user)
 
         book = Book.objects.create(
             title=self.cleaned_data["title"],
@@ -207,6 +212,7 @@ class QuickBookForm(forms.Form):
             is_pending=True,
             added_by=user,
         )
+        log_created(book, user)
         change_status(user, book, self.cleaned_data["status"])
         return book
 

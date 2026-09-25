@@ -1,12 +1,13 @@
 """Тесты фоновых задач Celery."""
 
+import datetime
 import logging
 
 import pytest
-from django.urls import reverse
+from django.utils import timezone
 
-from bookshelf_app.models import Book
-from bookshelf_app.tasks import log_new_book_task
+from bookshelf_app.models import EventLog
+from bookshelf_app.tasks import log_event_task
 
 
 @pytest.fixture
@@ -25,76 +26,56 @@ def task_logs(caplog):
     logger.propagate = propagate
 
 
-class TestLogNewBookTask:
-    """Задача логирования новой книги."""
+@pytest.fixture
+def event_data(user_1):
+    """Событие в том виде, в каком оно уходит в очередь: только простые значения."""
+    return {
+        "object_type": EventLog.ObjectType.BOOK,
+        "object_id": 7,
+        "object_repr": "Белая гвардия",
+        "action": EventLog.Action.UPDATED,
+        "user_id": user_1.pk,
+        "changes": {"title": {"old": "Гвардия", "new": "Белая гвардия"}},
+        "created_at": datetime.datetime(2026, 9, 1, 12, 30, tzinfo=datetime.timezone.utc).isoformat(),
+    }
 
-    def test_returns_message(self):
-        """Задача вызванная напрямую (как обычная функция)."""
-        result = log_new_book_task(
-            book_id=1,
-            title="Мастер и Маргарита",
-            author="Михаил Булгаков",
-            added_by="user_1",
-        )
-        assert "Мастер и Маргарита" in result
-        assert "Михаил Булгаков" in result
-        assert "id=1" in result
-        assert "user_1" in result
 
-    def test_writes_to_log(self, task_logs):
-        """Сообщение уходит в лог — его видно в консоли воркера."""
-        log_new_book_task(1, "Собачье сердце", "Михаил Булгаков", "user_1")
-        assert "Собачье сердце" in task_logs.text
+@pytest.mark.django_db
+class TestLogEventTask:
+    """Задача записи события журнала."""
 
-    def test_delay_executes_task(self):
+    def test_creates_record(self, event_data, user_1):
+        event_id = log_event_task(event_data)
+        event = EventLog.objects.get(pk=event_id)
+        assert event.user == user_1
+        assert event.action == EventLog.Action.UPDATED
+        assert event.object_type == EventLog.ObjectType.BOOK
+        assert event.object_id == 7
+        assert event.object_repr == "Белая гвардия"
+        assert event.changes == {"title": {"old": "Гвардия", "new": "Белая гвардия"}}
+
+    def test_keeps_event_time(self, event_data):
+        """Время — когда событие случилось, а не когда до него дошёл воркер."""
+        event = EventLog.objects.get(pk=log_event_task(event_data))
+        assert event.created_at == datetime.datetime(2026, 9, 1, 12, 30, tzinfo=datetime.timezone.utc)
+        assert event.created_at < timezone.now()
+
+    def test_without_user(self, event_data):
+        event = EventLog.objects.get(pk=log_event_task({**event_data, "user_id": None}))
+        assert event.user is None
+        assert "неизвестно" in str(event)
+
+    def test_writes_to_log(self, event_data, task_logs):
+        """Событие дублируется в лог — его видно в консоли воркера."""
+        log_event_task(event_data)
+        assert "Изменение: книга «Белая гвардия»" in task_logs.text
+
+    def test_delay_executes_task(self, event_data):
         """Задача ставится в очередь через .delay() и выполняется."""
-        async_result = log_new_book_task.delay(
-            book_id=7,
-            title="Белая гвардия",
-            author="Михаил Булгаков",
-            added_by="user_1",
-        )
+        async_result = log_event_task.delay(event_data)
         assert async_result.successful()
-        assert "Белая гвардия" in async_result.get()
+        assert EventLog.objects.filter(pk=async_result.get()).exists()
 
     def test_task_is_registered(self):
         """Задача зарегистрирована в приложении Celery под своим именем."""
-        assert log_new_book_task.name == "bookshelf_app.tasks.log_new_book_task"
-
-
-class TestBookCreateViewEnqueuesTask:
-    """Добавление книги через форму ставит фоновую задачу."""
-
-    @pytest.mark.django_db
-    def test_task_called_with_book_data(self, auth_client, book_form_data, user_1, mocker):
-        """В задачу уходят данные уже сохранённой книги (с pk)."""
-        delay = mocker.patch("bookshelf_app.views.log_new_book_task.delay")
-
-        response = auth_client.post(reverse("book_add"), data=book_form_data)
-
-        assert response.status_code == 302
-        book = Book.objects.get(title=book_form_data["title"])
-        delay.assert_called_once_with(
-            book_id=book.pk,
-            title=book.title,
-            author=str(book.author),
-            added_by=str(user_1),
-        )
-
-    @pytest.mark.django_db
-    def test_no_task_on_invalid_form(self, auth_client, book_form_data, mocker):
-        """Форма не прошла валидацию — задача не ставится."""
-        delay = mocker.patch("bookshelf_app.views.log_new_book_task.delay")
-
-        response = auth_client.post(
-            reverse("book_add"), data={**book_form_data, "title": ""}
-        )
-
-        assert response.status_code == 200
-        delay.assert_not_called()
-
-    @pytest.mark.django_db
-    def test_task_runs_on_book_create(self, auth_client, book_form_data, task_logs):
-        """Сквозная проверка: после добавления книги задача выполнилась."""
-        auth_client.post(reverse("book_add"), data=book_form_data)
-        assert book_form_data["title"] in task_logs.text
+        assert log_event_task.name == "bookshelf_app.tasks.log_event_task"

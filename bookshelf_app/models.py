@@ -51,11 +51,13 @@ class Book(SoftDeleteModel):
     description = models.TextField('Описание', blank=True)
     author = models.ForeignKey(
         Author,
+        verbose_name='Автор',
         on_delete=models.PROTECT,
         related_name='books',
     )
     genres = models.ManyToManyField(
         Genre,
+        verbose_name='Жанры',
         related_name='books',
         blank=True,
     )
@@ -194,3 +196,60 @@ class ReadingEntry(SoftDeleteModel):
                 self.finished_at = today
 
         return self
+
+
+class EventLog(models.Model):
+    """Событие журнала: кто, когда и что сделал с книгой или автором.
+
+    На объект ссылаемся типом и id, а не внешним ключом: запись журнала переживёт
+    что угодно, а `object_repr` сохранит, как объект назывался в момент события.
+    """
+
+    class Action(models.TextChoices):
+        """Что произошло с объектом."""
+
+        CREATED = 'created', 'Создание'
+        UPDATED = 'updated', 'Изменение'
+        DELETED = 'deleted', 'Удаление'
+        RESTORED = 'restored', 'Восстановление'
+
+    class ObjectType(models.TextChoices):
+        """Какие модели попадают в журнал."""
+
+        BOOK = 'book', 'Книга'
+        AUTHOR = 'author', 'Автор'
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='Кто',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='events',
+    )
+    action = models.CharField('Действие', max_length=10, choices=Action.choices)
+    object_type = models.CharField('Тип объекта', max_length=10, choices=ObjectType.choices)
+    object_id = models.PositiveBigIntegerField('id объекта')
+    object_repr = models.CharField('Объект', max_length=200)
+    changes = models.JSONField(
+        'Изменения',
+        default=dict,
+        blank=True,
+        help_text='{поле: {"old": старое значение, "new": новое}}',
+    )
+    created_at = models.DateTimeField('Когда', default=timezone.now, db_index=True)
+
+    class Meta:
+        verbose_name = 'событие журнала'
+        verbose_name_plural = 'журнал событий'
+        ordering = ('-created_at', '-pk')
+
+    def __repr__(self):
+        return f'EventLog({self.action}, {self.object_type}#{self.object_id}, user={self.user_id})'
+
+    def __str__(self):
+        who = self.user or 'неизвестно'
+        return (
+            f'{self.get_action_display()}: {self.get_object_type_display().lower()} '
+            f'«{self.object_repr}» ({who})'
+        )
