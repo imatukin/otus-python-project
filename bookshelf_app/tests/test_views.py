@@ -3,10 +3,11 @@
 import datetime
 
 import pytest
+from django.contrib.auth.models import AnonymousUser
 from django.urls import reverse
 
 from bookshelf_app.models import Author, Book, ReadingEntry, ReadingStatus, Review
-from bookshelf_app.views import CATALOG_PAGE_SIZE, SEARCH_LIMIT
+from bookshelf_app.views import CATALOG_PAGE_SIZE, SEARCH_LIMIT, with_status_actions
 
 
 def messages_of(response):
@@ -877,3 +878,18 @@ class TestReviewDeleteView:
         assert response.status_code == 302
         own_review.refresh_from_db()
         assert own_review.is_deleted is False
+
+
+class TestWithStatusActions:
+    """Кнопки смены статуса у выборки книг."""
+
+    @pytest.mark.django_db
+    def test_guest_gets_books_as_is(self, books):  # pylint: disable=unused-argument
+        queryset = Book.objects.all()
+        assert with_status_actions(queryset, AnonymousUser()) is queryset
+
+    @pytest.mark.django_db
+    def test_reader_gets_actions(self, books, user_1):
+        result = with_status_actions(Book.objects.all(), user_1)
+        assert len(result) == len(books)
+        assert all(book.status_actions for book in result)

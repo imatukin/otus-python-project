@@ -35,6 +35,10 @@ class TestGenre:
         assert str(genre) == "Роман"
 
     @pytest.mark.django_db
+    def test_repr(self, genre):
+        assert repr(genre) == "Роман"
+
+    @pytest.mark.django_db
     def test_name_is_unique(self, genre):
         with pytest.raises(IntegrityError):
             Genre.objects.create(name=genre.name)

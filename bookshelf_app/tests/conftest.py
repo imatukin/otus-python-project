@@ -13,12 +13,6 @@ PASSWORD = "12345"
 # --- Пользователи ---
 
 @pytest.fixture
-def password():
-    """Пароль, которым заводятся все тестовые пользователи."""
-    return PASSWORD
-
-
-@pytest.fixture
 def user_1():
     """Обычный читатель."""
     return CustomUser.objects.create_user(
