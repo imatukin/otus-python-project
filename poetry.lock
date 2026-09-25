@@ -404,24 +404,6 @@ celery = ">=5.2.7,<6.0"
 Django = ">=3.2.25"
 
 [[package]]
-name = "faker"
-version = "40.36.0"
-description = "Faker is a Python package that generates fake data for you."
-optional = false
-python-versions = ">=3.10"
-groups = ["main"]
-files = [
-    {file = "faker-40.36.0-py3-none-any.whl", hash = "sha256:82b9497d9cfe017048075bcf969298a74b1b6e39f5e4dad1211085d1133f7b62"},
-    {file = "faker-40.36.0.tar.gz", hash = "sha256:754048c76c03afa7de83eee8f4bcee3cf668cbb7d995f54a4e9678db7f110308"},
-]
-
-[package.dependencies]
-tzdata = {version = "*", markers = "platform_system == \"Windows\""}
-
-[package.extras]
-tzdata = ["tzdata"]
-
-[[package]]
 name = "iniconfig"
 version = "2.3.0"
 description = "brain-dead simple config-ini parsing"
@@ -1056,4 +1038,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<4.0"
-content-hash = "ac82e8ebd2303a557de4bcaeae4c5340283ed2d9c919d3a2465f413c7ec341d8"
+content-hash = "08db2e31e5d1fa6e58c398983dc489367eb1cb8e0e0cb5a935841834d8b635b9"

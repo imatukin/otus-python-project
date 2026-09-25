@@ -2,7 +2,7 @@
 REMOTES := $(shell git remote)
 BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
 
-.PHONY: test lint coverage pull push pushtags
+.PHONY: test lint coverage clean reset pull push pushtags
 
 test:
 	poetry run pytest
@@ -12,6 +12,16 @@ lint:
 
 coverage:
 	poetry run pytest -s --cov --cov-report html --cov-fail-under=95
+
+# Очистить базу: удалить все записи (включая суперпользователя), схема и миграции остаются.
+# flush сам спрашивает подтверждение; без вопроса — make clean FLUSH_ARGS=--noinput
+clean:
+	poetry run python manage.py flush $(FLUSH_ARGS)
+
+# Очистить базу и заново наполнить её демо-данными (gen_data). Суперпользователя потом
+# нужно создать заново. Если в flush ответить «no», gen_data лишь дозаведёт недостающее.
+reset: clean
+	poetry run python manage.py gen_data
 
 # Забрать изменения со всех remote: сначала общий fetch, затем fast-forward
 # текущей ветки от каждого из них по очереди
