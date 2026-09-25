@@ -35,9 +35,10 @@
                 </div>
                 {% endif %}
             </div>
-            <p class="text-muted mb-3">
+            <p class="text-muted mb-1">
                 {{ book.author.name }}{% if book.published_year %} · {{ book.published_year }} г.{% endif %}
             </p>
+            <p class="small text-muted mb-3">{% include 'bookshelf_app/include/book_stats.html' %}</p>
 
             {% if book.genres.all %}
             <p class="mb-3">
@@ -97,7 +98,12 @@
 
     <div class="d-flex align-items-center justify-content-between mb-3">
         <h2 class="h4 mb-0">Отзывы</h2>
-        <span class="badge bg-secondary">Всего: {{ reviews|length }}</span>
+        <div class="d-flex align-items-center gap-3">
+            <span class="badge bg-secondary">Всего: {{ reviews|length }}</span>
+            {% if user.is_authenticated %}
+            <a href="{% url 'review_add' book.id %}" class="btn btn-primary btn-sm review-add">Написать отзыв</a>
+            {% endif %}
+        </div>
     </div>
 
     {% for review in reviews %}
@@ -117,6 +123,12 @@
                 </span>
             </div>
             <p class="card-text mb-0">{{ review.text|linebreaksbr }}</p>
+            {% if review.reader_id == user.pk %}
+            <div class="d-flex gap-3 small mt-2 review-actions">
+                <a href="{% url 'review_edit' review.pk %}">Изменить</a>
+                <a href="{% url 'review_delete' review.pk %}" class="text-danger">Удалить</a>
+            </div>
+            {% endif %}
         </div>
     </div>
     {% empty %}

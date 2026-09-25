@@ -5,7 +5,7 @@ import datetime
 import pytest
 from django.urls import reverse
 
-from bookshelf_app.models import Author, Book, ReadingEntry, ReadingStatus
+from bookshelf_app.models import Author, Book, ReadingEntry, ReadingStatus, Review
 from bookshelf_app.views import SEARCH_LIMIT
 
 
@@ -401,6 +401,19 @@ class TestReadingStatusView:
         assert f"Дневник обновлён: «{book.title}» — читаю." in messages_of(response)
 
     @pytest.mark.django_db
+    def test_read_offers_review(self, auth_client, book, entry):  # pylint: disable=unused-argument
+        response = auth_client.post(self.url(book), {"status": "read"}, follow=True)
+        [message] = messages_of(response)
+        assert message.startswith(f"Дневник обновлён: «{book.title}» — прочитано.")
+        assert f'href="{reverse("review_add", args=[book.pk])}"' in message
+
+    @pytest.mark.django_db
+    def test_no_review_offer_for_other_statuses(self, auth_client, book):
+        response = auth_client.post(self.url(book), {"status": "planned"}, follow=True)
+        assert "review_add" not in str(messages_of(response))
+        assert "Написать отзыв" not in str(messages_of(response))
+
+    @pytest.mark.django_db
     def test_forbidden_transition(self, auth_client, book, entry):
         response = auth_client.post(self.url(book), {"status": "planned"}, follow=True)
         entry.refresh_from_db()
@@ -630,3 +643,190 @@ class TestDiaryAddView:
         assert "title" in response.context["form"].errors
         assert Book.objects.count() == 1
         assert Author.objects.count() == 1
+
+
+class TestBookStats:
+    """Средняя оценка и число прочтений в каталоге и на странице книги."""
+
+    @pytest.fixture
+    def rated_book(self, book, user_1, user_2):
+        """Книга с двумя живыми отзывами (5 и 2), одним удалённым и тремя прочтениями."""
+        for reader, rating in ((user_1, 5), (user_2, 2)):
+            Review.objects.create(book=book, reader=reader, text="…", rating=rating)
+        Review.objects.create(book=book, reader=user_1, text="…", rating=1).delete()
+        for reader, status in (
+            (user_1, ReadingStatus.READ), (user_1, ReadingStatus.READ),
+            (user_2, ReadingStatus.READ), (user_2, ReadingStatus.READING),
+        ):
+            ReadingEntry.objects.create(reader=reader, book=book, status=status)
+        ReadingEntry.objects.create(reader=user_2, book=book, status=ReadingStatus.READ).delete()
+        return book
+
+    @pytest.mark.django_db
+    def test_catalog(self, client, rated_book, book_of_user_2):
+        items = {item.pk: item for item in client.get(reverse("books")).context["books"]}
+        assert items[rated_book.pk].avg_rating == 3.5
+        assert items[rated_book.pk].readings_count == 3
+        assert items[book_of_user_2.pk].avg_rating is None
+        assert items[book_of_user_2.pk].readings_count == 0
+
+    @pytest.mark.django_db
+    def test_detail(self, client, rated_book):
+        book = client.get(rated_book.get_absolute_url()).context["book"]
+        assert (book.avg_rating, book.readings_count) == (3.5, 3)
+
+    @pytest.mark.django_db
+    def test_stats_do_not_duplicate_books(self, client, rated_book):  # pylint: disable=unused-argument
+        assert len(client.get(reverse("books")).context["books"]) == 1
+
+
+class TestReviewCreateView:
+    """Новый отзыв о книге."""
+
+    def url(self, book):
+        """Адрес формы нового отзыва."""
+        return reverse("review_add", args=[book.pk])
+
+    @pytest.mark.django_db
+    def test_anonymous_redirected_to_login(self, client, book):
+        url = self.url(book)
+        response = client.get(url)
+        assert response.status_code == 302
+        assert response.url == f"{reverse('login')}?next={url}"
+
+    @pytest.mark.django_db
+    def test_form_page(self, auth_client, book):
+        response = auth_client.get(self.url(book))
+        assert response.status_code == 200
+        context = response.context
+        assert context["page_title"] == f"Отзыв: {book.title}"
+        assert context["submit_label"] == "Опубликовать"
+        assert context["cancel_url"] == book.get_absolute_url()
+        assert "delete_url" not in context
+
+    @pytest.mark.django_db
+    def test_breadcrumbs(self, auth_client, book):
+        crumbs = auth_client.get(self.url(book)).context["breadcrumbs"]
+        assert [crumb["title"] for crumb in crumbs] == ["Главная", "Все книги", book.title, "Новый отзыв"]
+        assert crumbs[2]["url"] == book.get_absolute_url()
+
+    @pytest.mark.django_db
+    def test_review_created(self, auth_client, book, user_1):
+        response = auth_client.post(self.url(book), {"rating": "4", "text": "Хорошая книга."}, follow=True)
+        assert response.redirect_chain[-1][0] == book.get_absolute_url()
+        review = Review.objects.get()
+        assert (review.book, review.reader, review.rating, review.text) == (book, user_1, 4, "Хорошая книга.")
+        assert f"Отзыв о книге «{book.title}» опубликован." in messages_of(response)
+
+    @pytest.mark.django_db
+    def test_several_reviews_allowed(self, auth_client, book):
+        for rating in ("5", "3"):
+            auth_client.post(self.url(book), {"rating": rating, "text": "Ещё раз."})
+        assert Review.objects.filter(book=book).count() == 2
+
+    @pytest.mark.django_db
+    def test_invalid_form(self, auth_client, book):
+        response = auth_client.post(self.url(book), {"rating": "", "text": ""})
+        assert response.status_code == 200
+        assert not Review.objects.exists()
+
+    @pytest.mark.django_db
+    def test_missing_book(self, auth_client):
+        assert auth_client.get(reverse("review_add", args=[404])).status_code == 404
+
+    @pytest.mark.django_db
+    def test_deleted_book(self, auth_client, book):
+        book.delete()
+        assert auth_client.post(self.url(book), {"rating": "4", "text": "…"}).status_code == 404
+        assert not Review.all_objects.exists()
+
+
+@pytest.fixture
+def own_review(book, user_1):
+    """Отзыв user_1 на книгу."""
+    return Review.objects.create(book=book, reader=user_1, text="Мой отзыв.", rating=3)
+
+
+class TestReviewUpdateView:
+    """Правка своего отзыва."""
+
+    def url(self, review):
+        """Адрес правки отзыва."""
+        return reverse("review_edit", args=[review.pk])
+
+    @pytest.mark.django_db
+    def test_anonymous_redirected_to_login(self, client, own_review):
+        url = self.url(own_review)
+        response = client.get(url)
+        assert response.status_code == 302
+        assert response.url == f"{reverse('login')}?next={url}"
+
+    @pytest.mark.django_db
+    def test_form_prefilled(self, auth_client, own_review, book):
+        context = auth_client.get(self.url(own_review)).context
+        assert context["form"].instance == own_review
+        assert context["page_title"] == f"Правка отзыва: {book.title}"
+        assert context["cancel_url"] == book.get_absolute_url()
+        assert context["delete_url"] == reverse("review_delete", args=[own_review.pk])
+        assert [crumb["title"] for crumb in context["breadcrumbs"]] == [
+            "Главная", "Все книги", book.title, "Правка отзыва",
+        ]
+
+    @pytest.mark.django_db
+    def test_review_updated(self, auth_client, own_review, book):
+        response = auth_client.post(self.url(own_review), {"rating": "5", "text": "Передумал."}, follow=True)
+        assert response.redirect_chain[-1][0] == book.get_absolute_url()
+        own_review.refresh_from_db()
+        assert (own_review.rating, own_review.text) == (5, "Передумал.")
+        assert f"Отзыв о книге «{book.title}» сохранён." in messages_of(response)
+
+    @pytest.mark.parametrize("method", ["get", "post"])
+    @pytest.mark.django_db
+    def test_other_reader_not_found(self, auth_client_2, own_review, method):
+        response = getattr(auth_client_2, method)(self.url(own_review), {"rating": "1", "text": "Взлом."})
+        assert response.status_code == 404
+        own_review.refresh_from_db()
+        assert own_review.rating == 3
+
+    @pytest.mark.django_db
+    def test_review_of_deleted_book_not_found(self, auth_client, own_review, book):
+        book.delete()
+        Review.all_objects.filter(pk=own_review.pk).update(is_deleted=False, deleted_at=None)
+        assert auth_client.get(self.url(own_review)).status_code == 404
+
+
+class TestReviewDeleteView:
+    """Удаление своего отзыва."""
+
+    def url(self, review):
+        """Адрес удаления отзыва."""
+        return reverse("review_delete", args=[review.pk])
+
+    @pytest.mark.django_db
+    def test_confirmation_page(self, auth_client, own_review, book):
+        context = auth_client.get(self.url(own_review)).context
+        assert context["review"] == own_review
+        assert context["page_title"] == f"Удаление отзыва: {book.title}"
+        assert context["breadcrumbs"][-1]["title"] == "Удаление отзыва"
+
+    @pytest.mark.django_db
+    def test_review_soft_deleted(self, auth_client, own_review, book, user_1):
+        response = auth_client.post(self.url(own_review), follow=True)
+        assert response.redirect_chain[-1][0] == book.get_absolute_url()
+        review = Review.all_objects.get(pk=own_review.pk)
+        assert review.is_deleted is True
+        assert review.deleted_by == user_1
+        assert f"Отзыв о книге «{book.title}» удалён." in messages_of(response)
+
+    @pytest.mark.django_db
+    def test_other_reader_not_found(self, auth_client_2, own_review):
+        assert auth_client_2.post(self.url(own_review)).status_code == 404
+        own_review.refresh_from_db()
+        assert own_review.is_deleted is False
+
+    @pytest.mark.django_db
+    def test_anonymous_redirected_to_login(self, client, own_review):
+        response = client.post(self.url(own_review))
+        assert response.status_code == 302
+        own_review.refresh_from_db()
+        assert own_review.is_deleted is False

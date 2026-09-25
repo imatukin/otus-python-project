@@ -6,7 +6,16 @@ from django import forms
 from django.db import transaction
 
 from bookshelf_app.diary import TRANSITIONS, change_status
-from bookshelf_app.models import Author, Book, Genre, ReadingEntry, ReadingStatus
+from bookshelf_app.models import (
+    MAX_RATING,
+    MIN_RATING,
+    Author,
+    Book,
+    Genre,
+    ReadingEntry,
+    ReadingStatus,
+    Review,
+)
 
 MIN_PUBLISHED_YEAR = 1450
 
@@ -200,3 +209,29 @@ class QuickBookForm(forms.Form):
         )
         change_status(user, book, self.cleaned_data["status"])
         return book
+
+
+class ReviewForm(forms.ModelForm):
+    """Отзыв о книге: оценка звёздами и текст."""
+
+    rating = forms.TypedChoiceField(
+        label="Оценка",
+        coerce=int,
+        choices=[("", "— выберите оценку —")] + [
+            (value, f"{'★' * value}{'☆' * (MAX_RATING - value)} — {value}")
+            for value in range(MAX_RATING, MIN_RATING - 1, -1)
+        ],
+        error_messages={"required": "Поставьте оценку."},
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+
+    class Meta:
+        model = Review
+        fields = ("rating", "text")
+        labels = {"text": "Отзыв"}
+        widgets = {
+            "text": forms.Textarea(
+                attrs={"class": "form-control", "rows": 6, "placeholder": "Что понравилось, что нет."}
+            ),
+        }
+        error_messages = {"text": {"required": "Напишите хотя бы пару слов."}}

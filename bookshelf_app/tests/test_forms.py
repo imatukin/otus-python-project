@@ -4,7 +4,7 @@ import datetime
 
 import pytest
 
-from bookshelf_app.forms import MIN_PUBLISHED_YEAR, BookForm, QuickBookForm, ReadingEntryForm
+from bookshelf_app.forms import MIN_PUBLISHED_YEAR, BookForm, QuickBookForm, ReadingEntryForm, ReviewForm
 from bookshelf_app.models import Author, Book, ReadingEntry, ReadingStatus
 
 CURRENT_YEAR = datetime.date.today().year
@@ -391,3 +391,29 @@ class TestQuickBookForm:
         entry = ReadingEntry.objects.get(book=book)
         assert (entry.reader, entry.status) == (user_1, ReadingStatus.READING)
         assert entry.started_at is not None
+
+
+class TestReviewForm:
+    """Отзыв о книге."""
+
+    def test_fields(self):
+        assert list(ReviewForm().fields) == ["rating", "text"]
+
+    def test_rating_choices(self):
+        choices = ReviewForm().fields["rating"].choices
+        assert choices[0] == ("", "— выберите оценку —")
+        assert [value for value, _ in choices[1:]] == [5, 4, 3, 2, 1]
+        assert choices[-1] == (1, "★☆☆☆☆ — 1")
+
+    def test_valid(self):
+        form = ReviewForm({"rating": "4", "text": " Хорошо. "})
+        assert form.is_valid(), form.errors
+        assert form.cleaned_data == {"rating": 4, "text": "Хорошо."}
+
+    def test_required(self):
+        form = ReviewForm({"rating": "", "text": "   "})
+        assert form.errors == {"rating": ["Поставьте оценку."], "text": ["Напишите хотя бы пару слов."]}
+
+    @pytest.mark.parametrize("rating", ["0", "6", "abc"])
+    def test_rating_out_of_range(self, rating):
+        assert "rating" in ReviewForm({"rating": rating, "text": "Текст"}).errors

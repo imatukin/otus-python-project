@@ -3,9 +3,13 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.messages.views import SuccessMessageMixin
+from django.db.models import Avg, Count, OuterRef, Subquery, Value
+from django.db.models.functions import Coalesce
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
+from django.utils.functional import cached_property
+from django.utils.html import format_html
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 from django.views.generic import (
@@ -26,8 +30,8 @@ from bookshelf_app.diary import (
     status_actions,
     with_diary_status,
 )
-from bookshelf_app.forms import BookForm, QuickBookForm, ReadingEntryForm
-from bookshelf_app.models import Book, ReadingEntry
+from bookshelf_app.forms import BookForm, QuickBookForm, ReadingEntryForm, ReviewForm
+from bookshelf_app.models import Book, ReadingEntry, ReadingStatus, Review
 from .tasks import log_new_book_task
 
 # Сколько книг показываем в результатах поиска при быстром добавлении.
@@ -41,6 +45,30 @@ def log_new_book(book):
         title=book.title,
         author=str(book.author),
         added_by=str(book.added_by),
+    )
+
+
+def with_book_stats(books):
+    """Добавляет к выборке книг `avg_rating` (средняя оценка или None) и `readings_count`.
+
+    Прочтение — неудалённая запись дневника в статусе «Прочитано»; перечитал — два прочтения.
+    Считаем подзапросами, а не JOIN: два агрегата по разным связям через JOIN перемножили бы строки.
+    """
+    avg_rating = (
+        Review.objects.filter(book=OuterRef("pk"))
+        .values("book")
+        .annotate(value=Avg("rating"))
+        .values("value")
+    )
+    readings = (
+        ReadingEntry.objects.filter(book=OuterRef("pk"), status=ReadingStatus.READ)
+        .values("book")
+        .annotate(value=Count("pk"))
+        .values("value")
+    )
+    return books.annotate(
+        avg_rating=Subquery(avg_rating),
+        readings_count=Coalesce(Subquery(readings), Value(0)),
     )
 
 
@@ -130,7 +158,7 @@ class BookListView(BookBase, ListView):
     extra_context = {"page_title": "Все книги."}
 
     def get_queryset(self):
-        return (
+        return with_book_stats(
             super()
             .get_queryset()
             .select_related("author", "added_by")
@@ -149,10 +177,13 @@ class BookDetailView(BookObjectBase, DetailView):
     template_name = "bookshelf_app/book_detail.html"
     context_object_name = "book"
 
+    def get_queryset(self):
+        return with_book_stats(super().get_queryset())
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["reviews"] = (
-            self.object.reviews.select_related("reader").order_by("-created_at")
+            self.object.reviews.select_related("reader").order_by("-created_at", "-pk")
         )
         context["page_title"] = self.object.title
         context["can_delete"] = self.object.can_be_deleted_by(self.request.user)
@@ -263,8 +294,18 @@ class ReadingStatusView(LoginRequiredMixin, View):
         except StatusTransitionError:
             messages.error(request, f"Статус книги «{book.title}» так поменять нельзя.")
         else:
-            messages.success(request, f"Дневник обновлён: {entry}.")
+            messages.success(request, self.get_success_message(entry))
         return HttpResponseRedirect(self.get_redirect_url(book))
+
+    @staticmethod
+    def get_success_message(entry):
+        """Что сообщить после смены статуса; дочитавшему — предложить написать отзыв."""
+        if entry.status == ReadingStatus.READ:
+            return format_html(
+                'Дневник обновлён: {}. <a href="{}" class="alert-link review-offer">Написать отзыв?</a>',
+                entry, reverse("review_add", args=[entry.book_id]),
+            )
+        return f"Дневник обновлён: {entry}."
 
     def get_redirect_url(self, book):
         """Адрес из `next`, если он ведёт на наш сайт, иначе — страница книги."""
@@ -387,3 +428,109 @@ class DiaryAddView(LoginRequiredMixin, Breadcrumbs, FormView):
             f"Книга «{book.title}» добавлена в каталог черновиком и в ваш дневник.",
         )
         return super().form_valid(form)
+
+
+class ReviewCreateView(LoginRequiredMixin, BookBase, CreateView):
+    """Новый отзыв о книге. Своих отзывов на одну книгу может быть несколько."""
+
+    form_class = ReviewForm
+    template_name = "bookshelf_app/book_form.html"
+
+    @cached_property
+    def book(self):
+        """Книга из адреса: self.object у CreateView — будущий отзыв, а не она."""
+        return get_object_or_404(Book, pk=self.kwargs["pk"])
+
+    def get_breadcrumbs(self):
+        return super().get_breadcrumbs() + [
+            {"title": self.book.title, "url": self.book.get_absolute_url()},
+            {"title": "Новый отзыв"},
+        ]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(
+            page_title=f"Отзыв: {self.book.title}",
+            form_subtitle="Отзыв увидят все читатели на странице книги.",
+            submit_label="Опубликовать",
+            cancel_url=self.book.get_absolute_url(),
+        )
+        return context
+
+    def form_valid(self, form):
+        form.instance.book = self.book
+        form.instance.reader = self.request.user
+        messages.success(self.request, f"Отзыв о книге «{self.book.title}» опубликован.")
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return self.book.get_absolute_url()
+
+
+class ReviewBase(LoginRequiredMixin, BookBase):
+    """Базовая view для своего отзыва: чужие отзывы и отзывы на удалённые книги — 404."""
+
+    # self.object появляется из SingleObjectMixin у конкретных view.
+    # pylint: disable=no-member
+
+    model = Review
+
+    def get_queryset(self):
+        """Только свои отзывы о неудалённых книгах."""
+        return Review.objects.filter(
+            reader=self.request.user, book__is_deleted=False
+        ).select_related("book")
+
+    def get_breadcrumbs(self):
+        book = self.object.book
+        return super().get_breadcrumbs() + [{"title": book.title, "url": book.get_absolute_url()}]
+
+    def get_success_url(self):
+        """После правки или удаления отзыва — обратно на страницу книги."""
+        return self.object.book.get_absolute_url()
+
+
+class ReviewUpdateView(ReviewBase, UpdateView):
+    """Правка своего отзыва."""
+
+    form_class = ReviewForm
+    template_name = "bookshelf_app/book_form.html"
+
+    def get_breadcrumbs(self):
+        return super().get_breadcrumbs() + [{"title": "Правка отзыва"}]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(
+            page_title=f"Правка отзыва: {self.object.book.title}",
+            form_subtitle="Изменения увидят все читатели на странице книги.",
+            submit_label="Сохранить",
+            cancel_url=self.object.book.get_absolute_url(),
+            delete_url=reverse("review_delete", args=[self.object.pk]),
+        )
+        return context
+
+    def form_valid(self, form):
+        messages.success(self.request, f"Отзыв о книге «{self.object.book.title}» сохранён.")
+        return super().form_valid(form)
+
+
+class ReviewDeleteView(ReviewBase, DeleteView):
+    """Удаление своего отзыва — мягкое."""
+
+    template_name = "bookshelf_app/review_delete.html"
+    context_object_name = "review"
+
+    def get_breadcrumbs(self):
+        return super().get_breadcrumbs() + [{"title": "Удаление отзыва"}]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = f"Удаление отзыва: {self.object.book.title}"
+        return context
+
+    def form_valid(self, form):
+        """Помечаем отзыв удалённым от имени читателя."""
+        self.object.delete(user=self.request.user)
+        messages.success(self.request, f"Отзыв о книге «{self.object.book.title}» удалён.")
+        return HttpResponseRedirect(self.get_success_url())

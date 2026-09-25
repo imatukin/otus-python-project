@@ -55,6 +55,7 @@
                     <p class="text-muted small mb-2">
                         {{ book.author.name }}{% if book.published_year %} · {{ book.published_year }} г.{% endif %}
                     </p>
+                    <p class="text-muted small mb-2">{% include 'bookshelf_app/include/book_stats.html' %}</p>
 
                     {% if book.genres.all %}
                     <p class="mb-2">

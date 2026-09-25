@@ -1,0 +1,9 @@
+{# Средняя оценка и число прочтений книги. Ждёт book с аннотациями avg_rating и readings_count. #}
+<span class="book-stats">
+    {% if book.avg_rating is not None %}
+    <span class="text-warning avg-rating" title="Средняя оценка">★ {{ book.avg_rating|floatformat:1 }}</span>
+    {% else %}
+    <span class="fst-italic avg-rating">оценок нет</span>
+    {% endif %}
+    · <span class="readings-count">прочтений: {{ book.readings_count }}</span>
+</span>
