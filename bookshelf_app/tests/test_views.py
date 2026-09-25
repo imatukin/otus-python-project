@@ -6,7 +6,7 @@ import pytest
 from django.urls import reverse
 
 from bookshelf_app.models import Author, Book, ReadingEntry, ReadingStatus, Review
-from bookshelf_app.views import SEARCH_LIMIT
+from bookshelf_app.views import CATALOG_PAGE_SIZE, SEARCH_LIMIT
 
 
 def messages_of(response):
@@ -107,9 +107,65 @@ class TestBookListView:
         """Статус в дневнике берётся подзапросом, а не отдельным запросом на каждую книгу."""
         for item in books:
             ReadingEntry.objects.create(reader=item.added_by, book=item)
-        # Сессия, пользователь, книги с подзапросом статуса, жанры.
-        with django_assert_max_num_queries(4):
+        # Сессия, пользователь, счётчик пагинации, книги с подзапросом статуса, жанры книг
+        # и два списка в фильтрах (жанры и авторы).
+        with django_assert_max_num_queries(7):
             auth_client.get(reverse("books"))
+
+
+class TestBookListFilters:
+    """Фильтры и пагинация каталога."""
+
+    @pytest.fixture
+    def many_books(self, author, user_1):
+        """Книг на полторы страницы каталога."""
+        return [
+            Book.objects.create(title=f"Том {number:02}", author=author, added_by=user_1)
+            for number in range(1, CATALOG_PAGE_SIZE + CATALOG_PAGE_SIZE // 2 + 1)
+        ]
+
+    @pytest.mark.django_db
+    def test_filter_form_in_context(self, client):
+        form = client.get(reverse("books"), {"q": "мастер"}).context["filter_form"]
+        assert form.cleaned_data["q"] == "мастер"
+
+    @pytest.mark.django_db
+    def test_filters_narrow_list(self, client, book, book_of_user_2, author_2):  # pylint: disable=unused-argument
+        response = client.get(reverse("books"), {"author": author_2.pk})
+        assert list(response.context["books"]) == [book_of_user_2]
+
+    @pytest.mark.django_db
+    def test_sorted_by_title(self, client, book, book_of_user_2, books):
+        titles = [item.title for item in client.get(reverse("books")).context["books"]]
+        assert titles == sorted(item.title for item in [book, book_of_user_2, *books])
+
+    @pytest.mark.django_db
+    def test_first_page(self, client, many_books):
+        response = client.get(reverse("books"))
+        assert response.context["is_paginated"]
+        assert list(response.context["books"]) == many_books[:CATALOG_PAGE_SIZE]
+        assert response.context["paginator"].count == len(many_books)
+
+    @pytest.mark.django_db
+    def test_second_page(self, client, many_books):
+        response = client.get(reverse("books"), {"page": 2})
+        assert list(response.context["books"]) == many_books[CATALOG_PAGE_SIZE:]
+
+    @pytest.mark.django_db
+    def test_page_out_of_range(self, client, many_books):  # pylint: disable=unused-argument
+        assert client.get(reverse("books"), {"page": 99}).status_code == 404
+
+    @pytest.mark.django_db
+    def test_filter_query_without_page(self, client, author):
+        response = client.get(reverse("books"), {"q": "том", "author": author.pk, "page": 1})
+        assert response.context["filter_query"] == f"q=%D1%82%D0%BE%D0%BC&author={author.pk}"
+
+    @pytest.mark.django_db
+    def test_diary_label(self, auth_client, entries, book, book_of_user_2, books):  # pylint: disable=unused-argument
+        items = {item.pk: item for item in auth_client.get(reverse("books")).context["books"]}
+        assert items[book.pk].diary_label == "Прочитано"
+        assert items[book_of_user_2.pk].diary_label == "Хочу прочитать"
+        assert items[books[0].pk].diary_label is None
 
 
 class TestBookDetailView:

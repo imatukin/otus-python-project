@@ -369,4 +369,3 @@ class TestEventLogAdmin:
     def test_repr(self, event, user_1):
         assert repr(event) == f"EventLog(updated, book#{event.object_id}, user={user_1.pk})"
         assert str(event) == f"Изменение: книга «Мастер и Маргарита» ({user_1})"
-

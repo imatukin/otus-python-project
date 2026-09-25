@@ -4,7 +4,14 @@ import datetime
 
 import pytest
 
-from bookshelf_app.forms import MIN_PUBLISHED_YEAR, BookForm, QuickBookForm, ReadingEntryForm, ReviewForm
+from bookshelf_app.forms import (
+    MIN_PUBLISHED_YEAR,
+    BookFilterForm,
+    BookForm,
+    QuickBookForm,
+    ReadingEntryForm,
+    ReviewForm,
+)
 from bookshelf_app.models import Author, Book, ReadingEntry, ReadingStatus
 
 CURRENT_YEAR = datetime.date.today().year
@@ -417,3 +424,71 @@ class TestReviewForm:
     @pytest.mark.parametrize("rating", ["0", "6", "abc"])
     def test_rating_out_of_range(self, rating):
         assert "rating" in ReviewForm({"rating": rating, "text": "Текст"}).errors
+
+
+@pytest.mark.django_db
+class TestBookFilterForm:
+    """Фильтры каталога."""
+
+    def filtered(self, data):
+        """Книги, оставшиеся после фильтров."""
+        return set(BookFilterForm(data).filter(Book.objects.all()))
+
+    def test_all_fields_optional(self, book, book_of_user_2):
+        assert self.filtered({}) == {book, book_of_user_2}
+
+    def test_title_search_ignores_case_and_spaces(self, book, book_of_user_2):  # pylint: disable=unused-argument
+        assert self.filtered({"q": "  мастер   и "}) == {book}
+
+    def test_search_by_author_name(self, book, book_of_user_2):  # pylint: disable=unused-argument
+        assert self.filtered({"q": "достоевский"}) == {book_of_user_2}
+
+    def test_search_by_description(self, book, book_of_user_2):  # pylint: disable=unused-argument
+        assert self.filtered({"q": "добре"}) == {book}
+
+    def test_search_by_genre_name(self, book, book_of_user_2):  # pylint: disable=unused-argument
+        assert self.filtered({"q": "роман"}) == {book}
+
+    def test_search_words_combine(self, book, book_of_user_2, books):  # pylint: disable=unused-argument
+        """Каждое слово должно найтись — в любом из полей."""
+        assert self.filtered({"q": "булгаков маргарита"}) == {book}
+        assert self.filtered({"q": "булгаков наказание"}) == set()
+
+    def test_search_no_duplicates_by_genres(self, book, genre_2):
+        """У книги два жанра со словом «роман» — в выдаче она одна."""
+        genre_2.name = "Роман-эпопея"
+        genre_2.save()
+        book.genres.add(genre_2)
+        assert list(BookFilterForm({"q": "роман"}).filter(Book.objects.all())) == [book]
+
+    def test_genre(self, book, book_of_user_2, genre_2):  # pylint: disable=unused-argument
+        book_of_user_2.genres.add(genre_2)
+        assert self.filtered({"genre": genre_2.pk}) == {book_of_user_2}
+
+    def test_author(self, book, book_of_user_2, author):  # pylint: disable=unused-argument
+        assert self.filtered({"author": author.pk}) == {book}
+
+    def test_filters_combine(self, book, books, genre_2):
+        books[0].genres.add(genre_2)
+        assert self.filtered({"q": "книга", "genre": genre_2.pk, "author": book.author.pk}) == {books[0]}
+
+    def test_invalid_value_is_skipped(self, book, book_of_user_2, author):  # pylint: disable=unused-argument
+        """Несуществующий жанр — не ошибка, а пропущенный фильтр; остальные работают."""
+        assert self.filtered({"genre": "404", "author": author.pk}) == {book}
+
+    def test_deleted_author_not_in_choices(self, author, author_2):
+        author_2.delete()
+        assert list(BookFilterForm().fields["author"].queryset) == [author]
+
+    def test_is_active(self, author):
+        empty = BookFilterForm({"q": "  "})
+        empty.filter(Book.objects.all())
+        assert not empty.is_active
+        filled = BookFilterForm({"author": author.pk})
+        filled.filter(Book.objects.all())
+        assert filled.is_active
+
+    def test_unbound_form_is_not_active(self):
+        form = BookFilterForm()
+        assert set(form.filter(Book.objects.all())) == set()
+        assert not form.is_active

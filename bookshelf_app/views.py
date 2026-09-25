@@ -31,11 +31,14 @@ from bookshelf_app.diary import (
     with_diary_status,
 )
 from bookshelf_app.events import log_created, log_deleted, log_updated, stored_snapshot
-from bookshelf_app.forms import BookForm, QuickBookForm, ReadingEntryForm, ReviewForm
+from bookshelf_app.forms import BookFilterForm, BookForm, QuickBookForm, ReadingEntryForm, ReviewForm
 from bookshelf_app.models import Book, ReadingEntry, ReadingStatus, Review
 
 # Сколько книг показываем в результатах поиска при быстром добавлении.
 SEARCH_LIMIT = 20
+
+# Сколько книг на одной странице каталога.
+CATALOG_PAGE_SIZE = 12
 
 
 def with_book_stats(books):
@@ -141,23 +144,43 @@ class BookObjectBase(BookBase):
 
 
 class BookListView(BookBase, ListView):
-    """Список всех книг с автором, жанрами и средней оценкой."""
+    """Каталог: книги с автором, жанрами и средней оценкой, фильтры и пагинация.
+
+    Фильтры — GET-параметры формы `BookFilterForm`; ссылки пагинации их сохраняют.
+    Читателю у каждой книги — статус в его дневнике и кнопки смены статуса.
+    """
 
     template_name = "bookshelf_app/books.html"
     context_object_name = "books"
+    paginate_by = CATALOG_PAGE_SIZE
     extra_context = {"page_title": "Все книги."}
 
+    @cached_property
+    def filter_form(self):
+        """Форма фильтров, заполненная из строки запроса."""
+        return BookFilterForm(self.request.GET)
+
     def get_queryset(self):
-        return with_book_stats(
-            super()
-            .get_queryset()
+        books = with_book_stats(
+            self.filter_form.filter(super().get_queryset())
             .select_related("author", "added_by")
             .prefetch_related("genres")
+            .order_by("title", "pk")
         )
+        if self.request.user.is_authenticated:
+            books = with_diary_status(books, self.request.user)
+        return books
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["books"] = with_status_actions(context["books"], self.request.user)
+        if self.request.user.is_authenticated:
+            for book in context["books"]:
+                book.status_actions = status_actions(book.diary_status)
+                book.diary_label = ReadingStatus(book.diary_status).label if book.diary_status else None
+        # Строка запроса без номера страницы — к ней ссылки пагинации добавляют свой `page`.
+        query = self.request.GET.copy()
+        query.pop("page", None)
+        context.update(filter_form=self.filter_form, filter_query=query.urlencode())
         return context
 
 

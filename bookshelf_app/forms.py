@@ -4,6 +4,7 @@ import datetime
 
 from django import forms
 from django.db import transaction
+from django.db.models import Exists, OuterRef, Q
 
 from bookshelf_app.diary import TRANSITIONS, change_status
 from bookshelf_app.events import log_created
@@ -241,3 +242,75 @@ class ReviewForm(forms.ModelForm):
             ),
         }
         error_messages = {"text": {"required": "Напишите хотя бы пару слов."}}
+
+
+class BookFilterForm(forms.Form):
+    """Фильтры каталога: универсальный поиск, жанр и автор. Все поля необязательны.
+
+    Отправляется GET-запросом, поэтому неверное значение (жанр, которого нет) не ошибка,
+    а просто пропущенный фильтр — `filter()` берёт только прошедшие проверку поля.
+    """
+
+    q = forms.CharField(
+        label="Поиск",
+        required=False,
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control",
+                "type": "search",
+                "placeholder": "Название, автор, жанр или описание",
+            }
+        ),
+    )
+    genre = forms.ModelChoiceField(
+        label="Жанр",
+        queryset=Genre.objects.order_by("name"),
+        required=False,
+        empty_label="Все жанры",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    author = forms.ModelChoiceField(
+        label="Автор",
+        queryset=Author.objects.order_by("name"),
+        required=False,
+        empty_label="Все авторы",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+
+    def clean_q(self):
+        """Строка поиска без лишних пробелов."""
+        return _squash_spaces(self.cleaned_data["q"])
+
+    def filter(self, books):
+        """Выборка книг, суженная заполненными фильтрами."""
+        self.is_valid()
+        data = getattr(self, "cleaned_data", {})
+        for word in data.get("q", "").split():
+            books = books.filter(self.search_condition(word))
+        if data.get("genre"):
+            books = books.filter(genres=data["genre"])
+        if data.get("author"):
+            books = books.filter(author=data["author"])
+        return books
+
+    @staticmethod
+    def search_condition(word):
+        """Условие «слово есть в названии, имени автора, описании или названии жанра».
+
+        Жанр проверяется подзапросом, а не JOIN: книга с двумя подходящими жанрами
+        не должна попасть в выдачу дважды.
+        """
+        genre_match = Book.genres.through.objects.filter(
+            book=OuterRef("pk"), genre__name__icontains=word
+        )
+        return (
+            Q(title__icontains=word)
+            | Q(author__name__icontains=word)
+            | Q(description__icontains=word)
+            | Exists(genre_match)
+        )
+
+    @property
+    def is_active(self):
+        """Задан ли хоть один фильтр — чтобы показать «Сбросить» и другое сообщение о пустом списке."""
+        return any(getattr(self, "cleaned_data", {}).get(name) for name in self.fields)

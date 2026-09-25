@@ -114,6 +114,17 @@ class TestMenuTemplate:
         assert "Вход" not in links
         assert "Регистрация" not in links
 
+    def test_menu_order_for_guest(self, client):
+        titles = list(self.get_menu_links(client.get(reverse("index"))))
+        assert titles[:3] == ["Главная", "Все книги", "О сайте"]
+
+    def test_menu_order_for_reader(self, auth_client):
+        """Читателю главная — его дневник, каталог — второй пункт."""
+        links = self.get_menu_links(auth_client.get(reverse("index")))
+        assert list(links)[:4] == ["Мой дневник", "Все книги", "Добавить книгу", "О сайте"]
+        assert links["Мой дневник"]["href"] == reverse("index")
+        assert "active" in links["Мой дневник"]["class"]
+
     def test_logout_is_post_form(self, auth_client):
         soup = get_soup(auth_client.get(reverse("index")))
         form = soup.select_one(f'form[action="{reverse("logout")}"]')

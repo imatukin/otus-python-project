@@ -1,0 +1,32 @@
+{# Пагинация списка. Ждёт page_obj, paginator, is_paginated и filter_query — строку запроса без page. #}
+{% if is_paginated %}
+<nav class="mt-4" aria-label="Страницы каталога">
+    <ul class="pagination justify-content-center flex-wrap">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?{% if filter_query %}{{ filter_query }}&amp;{% endif %}page={{ page_obj.previous_page_number }}" aria-label="Предыдущая">&laquo;</a>
+        </li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
+        {% endif %}
+
+        {% for number in page_obj.paginator.page_range %}
+        {% if number == page_obj.number %}
+        <li class="page-item active" aria-current="page"><span class="page-link">{{ number }}</span></li>
+        {% else %}
+        <li class="page-item">
+            <a class="page-link" href="?{% if filter_query %}{{ filter_query }}&amp;{% endif %}page={{ number }}">{{ number }}</a>
+        </li>
+        {% endif %}
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?{% if filter_query %}{{ filter_query }}&amp;{% endif %}page={{ page_obj.next_page_number }}" aria-label="Следующая">&raquo;</a>
+        </li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}

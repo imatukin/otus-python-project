@@ -21,16 +21,8 @@
                         {% if url_name == 'index' %}aria-current="page"{% endif %}
                         href="{% url 'index' %}"
                     >
-                        Главная
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a
-                        class="nav-link px-3{% if url_name == 'about' %} active{% endif %}"
-                        {% if url_name == 'about' %}aria-current="page"{% endif %}
-                        href="{% url 'about' %}"
-                    >
-                        О сайте
+                        {# Гостю на главной — приветствие, а не дневник. #}
+                        {% if user.is_authenticated %}Мой дневник{% else %}Главная{% endif %}
                     </a>
                 </li>
                 <li class="nav-item">
@@ -53,6 +45,15 @@
                     </a>
                 </li>
                 {% endif %}
+                <li class="nav-item">
+                    <a
+                        class="nav-link px-3{% if url_name == 'about' %} active{% endif %}"
+                        {% if url_name == 'about' %}aria-current="page"{% endif %}
+                        href="{% url 'about' %}"
+                    >
+                        О сайте
+                    </a>
+                </li>
             </ul>
 
             <ul class="navbar-nav">
