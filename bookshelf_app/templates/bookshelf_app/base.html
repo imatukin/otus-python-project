@@ -30,6 +30,12 @@
             footer {
                 flex-shrink: 0;
             }
+
+            /* Поднимает элемент над .stretched-link: у её ::after z-index: 1, position-relative мало. */
+            .above-stretched-link {
+                position: relative;
+                z-index: 2;
+            }
         </style>
 
         {# Для стилей #}

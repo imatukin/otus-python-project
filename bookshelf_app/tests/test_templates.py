@@ -392,23 +392,15 @@ class TestBooksTemplate:
         card = self.get_cards(client.get(reverse("books")))[0]
         assert text_of(card.select_one(".card-text")) == "Описание пока не добавлено."
 
-    def test_card_footer_links_to_reader(self, client, book, user_1):  # pylint: disable=unused-argument
+    def test_card_without_added_by(self, client, book, user_1):  # pylint: disable=unused-argument
+        """В карточке каталога не показываем, кто добавил книгу."""
         card = self.get_cards(client.get(reverse("books")))[0]
-        link = card.select_one(".card-footer a")
-        assert text_of(link) == user_1.display_name
-        assert link["href"] == user_1.get_absolute_url()
+        assert "Добавил" not in text_of(card)
+        assert not card.select(f'a[href="{user_1.get_absolute_url()}"]')
 
-    def test_card_footer_link_keeps_class(self, client, book):  # pylint: disable=unused-argument
-        """Ссылка на читателя должна быть кликабельна поверх stretched-link карточки."""
+    def test_card_without_footer_for_guest(self, client, book):  # pylint: disable=unused-argument
         card = self.get_cards(client.get(reverse("books")))[0]
-        assert "position-relative" in card.select_one(".card-footer a")["class"]
-
-    def test_card_footer_without_reader(self, client, book):
-        book.added_by = None
-        book.save()
-        card = self.get_cards(client.get(reverse("books")))[0]
-        assert card.select_one(".card-footer a") is None
-        assert "неизвестно" in text_of(card.select_one(".card-footer"))
+        assert card.select_one(".card-footer") is None
 
     def test_deleted_book_hidden(self, client, books):
         books[0].delete()
@@ -754,7 +746,7 @@ class TestBooksStatusTemplate:
 
     def test_buttons_above_stretched_link(self, auth_client, book):  # pylint: disable=unused-argument
         form = get_soup(auth_client.get(reverse("books"))).select_one(".book-card .status-buttons")
-        assert "position-relative" in form["class"]
+        assert "above-stretched-link" in form["class"]
 
     def test_pending_badge(self, client, book, book_of_user_2):
         book.is_pending = True

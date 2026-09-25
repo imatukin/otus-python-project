@@ -77,12 +77,12 @@
                     {% endif %}
                 </div>
 
-                <div class="card-footer bg-white border-top-0 small text-muted">
-                    Добавил:
-                    {% include 'bookshelf_app/include/added_by.html' with link_class='position-relative' %}
-                    {# position-relative поднимает кнопки над stretched-link карточки. #}
-                    {% include 'bookshelf_app/include/status_buttons.html' with actions=book.status_actions form_class='position-relative mt-2' %}
+                {% if book.status_actions %}
+                <div class="card-footer bg-white border-top-0">
+                    {# above-stretched-link поднимает кнопки над stretched-link карточки. #}
+                    {% include 'bookshelf_app/include/status_buttons.html' with actions=book.status_actions form_class='above-stretched-link' %}
                 </div>
+                {% endif %}
             </div>
         </div>
         {% empty %}
