@@ -313,10 +313,10 @@ class TestReaderDiaryTemplate:
         assert not diary.select(".status-buttons")
         assert not diary.select(".entry-edit")
 
-    def test_editable_for_owner(self, auth_client, user_1, entry):
+    def test_editable_for_owner(self, auth_client, user_1, entry):  # pylint: disable=unused-argument
         diary = get_soup(auth_client.get(user_1.get_absolute_url())).select_one(".reader-diary")
         assert diary.select(".status-buttons button")
-        assert diary.select_one(".entry-edit")["href"] == reverse("entry_edit", args=[entry.pk])
+        assert diary.select_one(".entry-edit") is None
 
     def test_editable_in_profile(self, auth_client, entry):  # pylint: disable=unused-argument
         diary = get_soup(auth_client.get(reverse("profile"))).select_one(".reader-diary")

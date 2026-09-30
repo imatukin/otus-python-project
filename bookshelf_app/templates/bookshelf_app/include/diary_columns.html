@@ -58,7 +58,6 @@
                     {% if editable %}
                     <div class="card-footer bg-white border-top-0 d-flex flex-wrap align-items-center gap-2 pt-0">
                         {% include 'bookshelf_app/include/status_buttons.html' with book=item.book actions=item.actions form_class='above-stretched-link' %}
-                        <a href="{% url 'entry_edit' item.entry.pk %}" class="small entry-edit above-stretched-link">Изменить</a>
                     </div>
                     {% endif %}
                 </article>

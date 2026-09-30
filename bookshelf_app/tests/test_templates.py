@@ -833,9 +833,10 @@ class TestIndexDiaryActionsTemplate:
         assert status_buttons(card) == [("Прочитано", "read"), ("Бросил", "abandoned")]
         assert card.select_one('.status-buttons input[name="next"]')["value"] == reverse("index")
 
-    def test_edit_link(self, auth_client, entry):
-        card = get_soup(auth_client.get(reverse("index"))).select_one(".diary-book")
-        assert card.select_one(".entry-edit")["href"] == reverse("entry_edit", args=[entry.pk])
+    def test_no_edit_link_on_card(self, auth_client, entry):  # pylint: disable=unused-argument
+        # Правка текущей записи — только со страницы книги.
+        footer = get_soup(auth_client.get(reverse("index"))).select_one(".diary-book .card-footer")
+        assert footer.select_one(".entry-edit") is None
 
     def test_history_edit_links(self, auth_client, book, user_1):
         old = ReadingEntry.objects.create(reader=user_1, book=book, status="read")
