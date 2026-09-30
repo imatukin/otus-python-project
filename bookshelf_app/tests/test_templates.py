@@ -4,6 +4,8 @@ import datetime
 
 import pytest
 from bs4 import BeautifulSoup
+from django.conf import settings
+from django.contrib.staticfiles import finders
 from django.urls import reverse
 
 from bookshelf_app.models import Book, ReadingEntry, Review
@@ -61,6 +63,18 @@ class TestBaseTemplate:
         scripts = [script["src"] for script in soup.find_all("script", src=True)]
         assert any("bootstrap" in href for href in styles)
         assert any("bootstrap" in src for src in scripts)
+
+    def test_no_external_resources(self, client):
+        """Сайт автономен: стили и скрипты раздаются локально, а не со сторонних CDN."""
+        soup = get_soup(client.get(reverse("index")))
+        urls = [link["href"] for link in soup.find_all("link", href=True)]
+        urls += [script["src"] for script in soup.find_all("script", src=True)]
+        assert urls
+        assert not [url for url in urls if url.startswith(("http:", "https:", "//"))]
+        prefix = "/" + settings.STATIC_URL.lstrip("/")
+        for url in urls:
+            assert url.startswith(prefix)
+            assert finders.find(url.removeprefix(prefix)) is not None, url
 
     def test_extra_css_block(self, client, book):
         """На странице книги подключается свой блок стилей."""
