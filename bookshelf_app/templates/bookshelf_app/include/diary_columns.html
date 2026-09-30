@@ -1,7 +1,14 @@
-{# Колонки дневника из build_diary(). Ждёт columns; editable — показывать кнопки статуса и правку записей. #}
+{# Блоки дневника из build_diary() друг под другом, мини-карточки в блоке — в ряд с переносом. Ждёт columns; editable — кнопки статуса и правка. #}
 <style>
-    .diary-book + .diary-book {
-        border-top: 1px solid rgba(0, 0, 0, .125);
+    /* Подложка блока — цвета фона сайта, чтобы белые мини-карточки на ней выделялись. */
+    .diary-column > .card-body {
+        background-color: #eef0f3;
+    }
+
+    .diary-books {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+        gap: 1rem;
     }
 
     .diary-history summary {
@@ -9,53 +16,58 @@
     }
 </style>
 
-<div class="row row-cols-1 row-cols-md-2 row-cols-xl-4 g-4">
+<div class="d-flex flex-column gap-4">
     {% for column in columns %}
-    <div class="col">
-        <section class="card shadow-sm h-100 diary-column" data-status="{{ column.status }}">
-            <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                <h2 class="h6 mb-0">{{ column.title }}</h2>
-                <span class="badge bg-primary rounded-pill diary-count">{{ column.count }}</span>
-            </div>
+    <section class="card shadow-sm diary-column" data-status="{{ column.status }}">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h2 class="h6 mb-0">{{ column.title }}</h2>
+            <span class="badge bg-primary rounded-pill diary-count">{{ column.count }}</span>
+        </div>
 
-            <div class="card-body p-0">
+        <div class="card-body">
+            {% if column.books %}
+            <div class="diary-books">
                 {% for item in column.books %}
-                <article class="diary-book p-3">
-                    <h3 class="h6 mb-1">
-                        <a href="{{ item.book.get_absolute_url }}">{{ item.book.title }}</a>
-                    </h3>
-                    <p class="text-muted small mb-1">{{ item.book.author.name }}</p>
-                    {% include 'bookshelf_app/include/entry_dates.html' with entry=item.entry %}
+                <article class="diary-book card h-100 shadow-sm book-card position-relative">
+                    <div class="card-body d-flex flex-column">
+                        <h3 class="h6 card-title mb-1">
+                            <a href="{{ item.book.get_absolute_url }}" class="stretched-link">{{ item.book.title }}</a>
+                        </h3>
+                        <p class="text-muted small mb-1">{{ item.book.author.name }}</p>
+                        {% include 'bookshelf_app/include/entry_dates.html' with entry=item.entry %}
+
+                        {% if item.history %}
+                        {# above-stretched-link поднимает историю и кнопки над stretched-link карточки. #}
+                        <details class="diary-history small mt-2 above-stretched-link">
+                            <summary class="text-muted">История прочтений ({{ item.readings_count }})</summary>
+                            <ul class="list-unstyled mb-0 mt-1 ps-2 border-start">
+                                {% for past in item.history %}
+                                <li>
+                                    {{ past.get_status_display }}
+                                    {% include 'bookshelf_app/include/entry_dates.html' with entry=past inline=True %}
+                                    {% if editable %}
+                                    <a href="{% url 'entry_edit' past.pk %}" class="entry-edit">изменить</a>
+                                    {% endif %}
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </details>
+                        {% endif %}
+                    </div>
 
                     {% if editable %}
-                    <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
-                        {% include 'bookshelf_app/include/status_buttons.html' with book=item.book actions=item.actions %}
-                        <a href="{% url 'entry_edit' item.entry.pk %}" class="small entry-edit">Изменить</a>
+                    <div class="card-footer bg-white border-top-0 d-flex flex-wrap align-items-center gap-2 pt-0">
+                        {% include 'bookshelf_app/include/status_buttons.html' with book=item.book actions=item.actions form_class='above-stretched-link' %}
+                        <a href="{% url 'entry_edit' item.entry.pk %}" class="small entry-edit above-stretched-link">Изменить</a>
                     </div>
                     {% endif %}
-
-                    {% if item.history %}
-                    <details class="diary-history small mt-2">
-                        <summary class="text-muted">История прочтений ({{ item.readings_count }})</summary>
-                        <ul class="list-unstyled mb-0 mt-1 ps-2 border-start">
-                            {% for past in item.history %}
-                            <li>
-                                {{ past.get_status_display }}
-                                {% include 'bookshelf_app/include/entry_dates.html' with entry=past inline=True %}
-                                {% if editable %}
-                                <a href="{% url 'entry_edit' past.pk %}" class="entry-edit">изменить</a>
-                                {% endif %}
-                            </li>
-                            {% endfor %}
-                        </ul>
-                    </details>
-                    {% endif %}
                 </article>
-                {% empty %}
-                <p class="text-muted fst-italic small p-3 mb-0">Здесь пока пусто.</p>
                 {% endfor %}
             </div>
-        </section>
-    </div>
+            {% else %}
+            <p class="text-muted fst-italic small mb-0">Здесь пока пусто.</p>
+            {% endif %}
+        </div>
+    </section>
     {% endfor %}
 </div>
