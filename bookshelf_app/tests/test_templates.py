@@ -67,6 +67,11 @@ class TestBaseTemplate:
         soup = get_soup(client.get(book.get_absolute_url()))
         assert any(".rating" in style.get_text() for style in soup.find_all("style"))
 
+    @pytest.mark.parametrize("url_name", ["index", "books", "recommendations", "about"])
+    def test_no_template_comments_leak(self, auth_client, book, url_name):  # pylint: disable=unused-argument
+        """Комментарий `{# … #}` однострочный: растянутый на несколько строк попадает в страницу."""
+        assert "{#" not in auth_client.get(reverse(url_name)).content.decode()
+
     def test_no_messages_by_default(self, client):
         soup = get_soup(client.get(reverse("index")))
         assert not soup.select(".alert-dismissible")
