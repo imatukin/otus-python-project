@@ -33,6 +33,7 @@ from bookshelf_app.diary import (
 from bookshelf_app.events import log_created, log_deleted, log_updated, stored_snapshot
 from bookshelf_app.forms import BookFilterForm, BookForm, QuickBookForm, ReadingEntryForm, ReviewForm
 from bookshelf_app.models import Book, ReadingEntry, ReadingStatus, Review
+from bookshelf_app.recommendations import recommend
 
 # Сколько книг показываем в результатах поиска при быстром добавлении.
 SEARCH_LIMIT = 20
@@ -181,6 +182,39 @@ class BookListView(BookBase, ListView):
         query = self.request.GET.copy()
         query.pop("page", None)
         context.update(filter_form=self.filter_form, filter_query=query.urlencode())
+        return context
+
+
+class RecommendationsView(Breadcrumbs, ListView):
+    """«Что почитать»: книги, подобранные по оценкам и дневнику читателя (`recommendations.py`).
+
+    Гостю и читателю, который ещё ничего не оценил, — популярные книги.
+    """
+
+    template_name = "bookshelf_app/recommendations.html"
+    context_object_name = "books"
+    paginate_by = CATALOG_PAGE_SIZE
+    extra_context = {"page_title": "Что почитать"}
+
+    def get_breadcrumbs(self):
+        return super().get_breadcrumbs() + [{"title": "Что почитать"}]
+
+    @cached_property
+    def recommendation(self):
+        """Пара из `recommend()`: отсортированные книги и вкус читателя."""
+        user = self.request.user
+        return recommend(with_book_stats(Book.objects.all()), user if user.is_authenticated else None)
+
+    def get_queryset(self):
+        return self.recommendation[0]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        if self.request.user.is_authenticated:
+            # Книг из дневника в подборке нет — всем кнопки как для новой книги.
+            for book in context["books"]:
+                book.status_actions = status_actions(None)
+        context["personal"] = bool(self.recommendation[1])
         return context
 
 

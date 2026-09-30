@@ -96,11 +96,12 @@ class TestMenuTemplate:
 
     def test_anonymous_menu_items(self, client):
         links = self.get_menu_links(client.get(reverse("index")))
-        assert set(links) == {"Главная", "О сайте", "Все книги", "Вход", "Регистрация"}
+        assert set(links) == {"Главная", "Что почитать", "О сайте", "Все книги", "Вход", "Регистрация"}
 
     def test_anonymous_menu_hrefs(self, client):
         links = self.get_menu_links(client.get(reverse("index")))
         assert links["Главная"]["href"] == reverse("index")
+        assert links["Что почитать"]["href"] == reverse("recommendations")
         assert links["О сайте"]["href"] == reverse("about")
         assert links["Все книги"]["href"] == reverse("books")
         assert links["Вход"]["href"] == reverse("login")
@@ -116,12 +117,12 @@ class TestMenuTemplate:
 
     def test_menu_order_for_guest(self, client):
         titles = list(self.get_menu_links(client.get(reverse("index"))))
-        assert titles[:3] == ["Главная", "Все книги", "О сайте"]
+        assert titles[:4] == ["Главная", "Что почитать", "Все книги", "О сайте"]
 
     def test_menu_order_for_reader(self, auth_client):
-        """Читателю главная — его дневник, каталог — второй пункт."""
+        """Читателю главная — его дневник, за ним подборка и каталог."""
         links = self.get_menu_links(auth_client.get(reverse("index")))
-        assert list(links)[:4] == ["Мой дневник", "Все книги", "Добавить книгу", "О сайте"]
+        assert list(links)[:5] == ["Мой дневник", "Что почитать", "Все книги", "Добавить книгу", "О сайте"]
         assert links["Мой дневник"]["href"] == reverse("index")
         assert "active" in links["Мой дневник"]["class"]
 

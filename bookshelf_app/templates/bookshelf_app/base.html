@@ -36,6 +36,30 @@
                 position: relative;
                 z-index: 2;
             }
+
+            /* Карточки книг в каталоге и в подборке «Что почитать». */
+            .book-card {
+                transition: transform .15s ease-in-out, box-shadow .15s ease-in-out;
+            }
+
+            .book-card:hover {
+                transform: translateY(-4px);
+                box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .15) !important;
+            }
+
+            .book-card .rating {
+                color: #ffc107;
+                letter-spacing: .1rem;
+            }
+
+            .book-card .card-title a {
+                color: inherit;
+                text-decoration: none;
+            }
+
+            .book-card:hover .card-title a {
+                text-decoration: underline;
+            }
         </style>
 
         {# Для стилей #}

@@ -1,0 +1,43 @@
+{% extends 'bookshelf_app/base.html' %}
+
+{% block title %} {{page_title}} {% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    {% include 'bookshelf_app/include/breadcrumb.html' %}
+
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h1 class="h3 mb-0">{{ page_title }}</h1>
+        <span class="badge bg-secondary">Всего: {{ paginator.count }}</span>
+    </div>
+
+    <p class="text-muted recommendations-hint">
+        {% if personal %}
+        Книги подобраны по вашим отзывам и дневнику: выше — авторы и жанры, которые вам нравятся.
+        Прочитанных и запланированных книг здесь нет.
+        {% elif user.is_authenticated %}
+        Пока это просто популярные книги. Оцените прочитанные или отметьте их в дневнике —
+        и подборка станет личной.
+        {% else %}
+        Популярные книги сайта. <a href="{% url 'register' %}">Зарегистрируйтесь</a> или
+        <a href="{% url 'login' %}">войдите</a>, чтобы получить подборку по своему вкусу.
+        {% endif %}
+    </p>
+
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-4">
+        {% for book in books %}
+        <div class="col">
+            {% include 'bookshelf_app/include/book_card.html' %}
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <div class="alert alert-info mb-0" role="alert">
+                Предложить пока нечего. Загляните в <a href="{% url 'books' %}" class="alert-link">каталог</a>.
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% include 'bookshelf_app/include/pagination.html' %}
+</div>
+{% endblock %}

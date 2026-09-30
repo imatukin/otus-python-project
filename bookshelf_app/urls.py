@@ -14,6 +14,7 @@ from bookshelf_app.views import (
     ReadingEntryDeleteView,
     ReadingEntryUpdateView,
     ReadingStatusView,
+    RecommendationsView,
     ReviewCreateView,
     ReviewDeleteView,
     ReviewUpdateView,
@@ -22,6 +23,7 @@ from bookshelf_app.views import (
 urlpatterns = [
     path("", IndexView.as_view(), name="index"),
     path("about/", AboutView.as_view(), name="about"),
+    path("recommendations/", RecommendationsView.as_view(), name="recommendations"),
     path("books/", BookListView.as_view(), name="books"),
     path("books/add/", BookCreateView.as_view(), name="book_add"),
     path("books/<int:pk>/", BookDetailView.as_view(), name="book_detail"),
